@@ -26,5 +26,4 @@ Don't forget to
 ## Testing
 To launch tests :
 ```bash
-docker-compose -f ./docker-compose.example.test.yml run example-test
-```
+docker-compose -f ./docker-compose.ubar.test.yml run ubar

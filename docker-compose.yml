@@ -11,14 +11,26 @@ services:
     volumes:
       - ./postgres-data/postgres:/var/lib/postgresql/data
     restart: always
-  example:
-    build: ./example
+# example:
+#    build: ./example
+#    links:
+#      - postgresql
+#    ports:
+#      - "6200:6200"
+#    environment:
+#      - SQLALCHEMY_DATABASE_URI=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgresql:5432/${POSTGRES_DB}
+#     - FLASK_ENV
+#    volumes:
+#      - "./example/example:/opt/app"
+  user:
+    build: ./user
     links:
       - postgresql
     ports:
-      - "6200:6200"
+      - "5000:5000"
     environment:
       - SQLALCHEMY_DATABASE_URI=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgresql:5432/${POSTGRES_DB}
       - FLASK_ENV
     volumes:
-      - "./example/example:/opt/app"
+      - "./user/user:/opt/app"
+

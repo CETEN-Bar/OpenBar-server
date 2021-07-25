@@ -1,0 +1,22 @@
+version: '3'
+services:
+  postgresql:
+    image: postgres
+    environment:
+      - POSTGRES_DB=bar-test
+      - POSTGRES_USER
+      - POSTGRES_PASSWORD
+    ports:
+      - "5436:5436"
+    volumes:
+      - ./postgres-data/postgres:/var/lib/postgresql/data
+    restart: always
+  example-test:
+    build: 
+      context: ./ubar
+      dockerfile: Dockerfile.test
+    links:
+      - postgresql
+    environment:
+      - SQLALCHEMY_DATABASE_URI=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgresql:5436/bar-test
+      - FLASK_ENV
