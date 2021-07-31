@@ -9,14 +9,17 @@ https://github.com/python-restx/flask-restx/blob/master/examples/todomvc.py
 from dateutil import parser
 
 from flask_restx import Namespace, Resource, fields
-from sqlalchemy import select, delete, update,ForeignKey
+from sqlalchemy import select, delete, update,ForeignKey,exc
 from sqlalchemy.orm import relationship
 
 import bcrypt
+import sys
 
 from tools.auth import check_authorization
 from tools.db import db, get_session
 
+
+local_history= []
 
 api = Namespace('user', description='User')
 class RoleDAO(db.Model):
@@ -103,39 +106,57 @@ class userList(Resource):
 
 
 @check_authorization
-@api.route("/<int:id>")
+@api.route("/<string:id_card>")
 @api.response(404, "task not found")
-@api.param("id", "The task identifier")
-class Task(Resource):
-    """Show a single task item and lets you delete them"""
+@api.param("id_card", "The user card identifier")
+class User(Resource):
+    """Show a single user item and lets you delete them"""
     @api.doc("get_task")
     @api.marshal_with(userModel)
-    def get(self, id):
-        """Fetch a given task"""
-        ses = get_session()
-        task = ses.execute(select(UserDAO).where(UserDAO.id == id)).scalar_one()
-        return task
+    def get(self, id_card):
+        """Fetch a given user"""
+        try:
+            ses = get_session()
+            user = ses.execute(select(UserDAO).where(UserDAO.id_card == str(bcrypt.hashpw(str.encode(id_card),b'$2b$12$VMATDKC7/YGRh.SO5K5c3.')))).scalar_one()
+            local_history.insert(0,user.name+" "+user.fname)
+            return user
+        except exc.SQLAlchemyError:
+            local_history.insert(0,"*******")
+            
+
 
     @api.doc("delete_task")
     @api.response(204, "task deleted")
-    def delete(self, id):
-        """Delete a task given its identifier"""
+    def delete(self, id_card):
+        """Delete a user given its identifier"""
         ses = get_session()
-        ses.execute(delete(UserDAO).where(UserDAO.id == id))
+        ses.execute(delete(UserDAO).where(UserDAO.id_card == str(bcrypt.hashpw(str.encode(id_card),b'$2b$12$VMATDKC7/YGRh.SO5K5c3.'))))
         ses.commit()
         return "", 204
 
     @api.expect(userModel)
     @api.marshal_with(userModel)
-    def put(self, id):
-        """Update a task given its identifier"""
+    def put(self, id_card):
+        """Update a user given its identifier"""
         payload = api.payload
         if 'id' in payload:
             payload.pop('id')
         ses = get_session()
-        ses.execute(update(UserDAO).where(UserDAO.id == id).values(payload))
+        ses.execute(update(UserDAO).where(UserDAO.id_card == str(bcrypt.hashpw(str.encode(id_card),b'$2b$12$VMATDKC7/YGRh.SO5K5c3.'))).values(payload))
         ses.commit()
-        return ses.execute(select(UserDAO).where(UserDAO.id == id)).scalar_one()
+        return ses.execute(select(UserDAO).where(UserDAO.id_card == str(bcrypt.hashpw(str.encode(id_card),b'$2b$12$VMATDKC7/YGRh.SO5K5c3.')))).scalar_one()
+
+@check_authorization
+@api.route("/history")
+class History(Resource):
+    """Show the history of the NFC card reader. This history will reset each time you restart the app"""
+    @api.doc("get_history")
+    def get(self):
+        """Fetch the history"""
+        return local_history
+
+            
+
 
 # Original Licence of https://github.com/python-restx/flask-restx/blob/master/examples/todomvc.py
 

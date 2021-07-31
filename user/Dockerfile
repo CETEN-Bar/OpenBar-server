@@ -10,6 +10,7 @@ RUN python -m pip install --no-cache-dir -r requirements.txt
 COPY user/ /opt/app
 
 RUN export FLASK_APP=app.py:create_app
+RUN export FLASK_ENV=development
 
 EXPOSE 6200
 ENTRYPOINT ["flask" , "run", "-p", "5000", "--host=0.0.0.0"]
