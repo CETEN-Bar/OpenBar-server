@@ -11,9 +11,11 @@ from dateutil import parser
 from flask_restx import Namespace, Resource, fields
 from sqlalchemy import select, delete, update,ForeignKey,exc
 from sqlalchemy.orm import relationship
-
+from flask_socketio import send, SocketIO
+from . import socketio
 import bcrypt
 import sys
+
 
 from tools.auth import check_authorization
 from tools.db import db, get_session
@@ -22,6 +24,7 @@ from tools.db import db, get_session
 local_history= []
 
 api = Namespace('user', description='User')
+
 class RoleDAO(db.Model):
     """role object"""
     __tablename__ = 'role'
@@ -40,6 +43,18 @@ class UserDAO(db.Model):
     role = db.Column(db.Integer,ForeignKey('role.id'),nullable=False)
     username = db.Column(db.String)
     password = db.Column(db.String)
+
+    def to_json(self):
+        return {
+                'id':self.id,
+                'id_card':self.id_card,
+                'name':self.name,
+                'fname':self.fname,
+                'balance':self.balance,
+                'role':self.role,
+                'username':self.username,
+                'password':self.password
+        }
 
 userModel = api.model('User', {
     'id': fields.Integer(
@@ -113,12 +128,14 @@ class User(Resource):
     """Show a single user item and lets you delete them"""
     @api.doc("get_task")
     @api.marshal_with(userModel)
+    @socketio.on("message")
     def get(self, id_card):
         """Fetch a given user"""
         try:
             ses = get_session()
             user = ses.execute(select(UserDAO).where(UserDAO.id_card == str(bcrypt.hashpw(str.encode(id_card),b'$2b$12$VMATDKC7/YGRh.SO5K5c3.')))).scalar_one()
             local_history.insert(0,user.name+" "+user.fname)
+            socketio.send(user.to_json())
             return user
         except exc.SQLAlchemyError:
             local_history.insert(0,"*******")
