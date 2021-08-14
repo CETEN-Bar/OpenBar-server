@@ -1,5 +1,7 @@
+postgres-data
 
-# Created by https://www.toptal.com/developers/gitignore/api/linux,macos,python,windows,pycharm,sublimetext,visualstudiocode,libreoffice
+
+# Based upon https://www.toptal.com/developers/gitignore/api/linux,macos,python,windows,pycharm,sublimetext,visualstudiocode,libreoffice
 # Edit at https://www.toptal.com/developers/gitignore?templates=linux,macos,python,windows,pycharm,sublimetext,visualstudiocode,libreoffice
 
 ### LibreOffice ###
