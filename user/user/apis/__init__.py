@@ -25,7 +25,7 @@ app.config.update(dict(
     PONY = {
         'provider': 'postgres',
         'host': 'database',
-        "database":'user',
+        'database': 'user',
         'port': '5432',
         'password': os.environ.get('DB_SERVICE_USER_PW'),
         'user':'service_user'
