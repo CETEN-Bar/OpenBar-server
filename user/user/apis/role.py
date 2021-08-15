@@ -43,7 +43,7 @@ class userList(Resource):
     @db_session
     @api.marshal_list_with(roleModem)
     def get(self):
-        """List all user"""
+        """List all roles"""
         roles = select(p for p in RoleDAO)[:]
         result = {'data': [p.to_dict() for p in roles]}
         return result['data']
@@ -64,7 +64,7 @@ class userList(Resource):
     @api.marshal_with(roleModem, code=201)
     @db_session
     def post(self):
-        """Create a new user"""
+        """Create a new role"""
         payload = api.payload
         role = RoleDAO(**payload)
         commit()
