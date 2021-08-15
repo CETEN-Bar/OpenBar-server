@@ -27,7 +27,7 @@ app.config.update(dict(
         'host': 'database',
         'database': 'user',
         'port': '5432',
-        'password': os.environ.get('DB_SERVICE_USER_PW'),
+        'password': os.environ.get('DB_PASSWORD'),
         'user':'service_user'
     }
 ))

@@ -6,7 +6,7 @@ services:
       - POSTGRES_DB
       - POSTGRES_USER
       - POSTGRES_PASSWORD
-      - DB_USER_PW
+      - DB_SERVICE_USER_PW
     ports:
       - "5433:5433"
     volumes:
@@ -42,6 +42,6 @@ services:
     environment:
       - SQLALCHEMY_DATABASE_URI=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgresql:5432/${POSTGRES_DB}
       - FLASK_ENV
-      - DB_PASSWORD${DB_USER_PW}
+      - DB_PASSWORD=${DB_SERVICE_USER_PW}
     volumes:
       - "./user/user:/opt/app"
