@@ -6,15 +6,7 @@ Set of function initialize sqlalchemy
 """
 
 from flask import g
-from flask_sqlalchemy import SQLAlchemy
+from pony.orm import *
 
-db = SQLAlchemy()
+db = Database()
 
-def get_session():
-    """Return the session of the db
-    and initialize  the db if necessery
-    """
-    if getattr(g, '_db_init', None) == None:
-        db.create_all()
-        g._db_init = True
-    return db.session
