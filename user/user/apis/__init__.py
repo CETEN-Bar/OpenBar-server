@@ -29,7 +29,7 @@ app.config.update(dict(
         "database":'bar',
         'port':'5432',
         'password':'changeCeSatanéMDPavantDeMettreEnProd',
-        'user':'root'
+        'user':'root',
     }
 ))
 

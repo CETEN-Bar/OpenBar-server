@@ -76,7 +76,8 @@ userModel = api.model('User', {
     'role': fields.Integer(
         required=True,
         example=1,
-        description='User\'s role identifier'),
+        description='User\'s role identifier',
+        attribute= lambda x: x.role.get_pk()) ,
     'username': fields.String(
         required=False,
         description='Username'),
@@ -95,7 +96,8 @@ class userList(Resource):
     def get(self):
         """List all user"""
         users = UserDAO.select()
-        return users
+        result = {'data': [p.to_dict() for p in users]}
+        return result['data']
 
 
     @api.doc("create_user")

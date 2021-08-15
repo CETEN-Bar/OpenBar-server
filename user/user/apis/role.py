@@ -44,8 +44,9 @@ class userList(Resource):
     @api.marshal_list_with(roleModem)
     def get(self):
         """List all user"""
-        roles = RoleDAO.select()
-        return roles
+        roles = select(p for p in RoleDAO)[:]
+        result = {'data': [p.to_dict() for p in roles]}
+        return result['data']
 
     '''
     @api.doc("delete_role")
