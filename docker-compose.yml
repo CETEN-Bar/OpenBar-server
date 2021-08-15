@@ -1,20 +1,28 @@
 version: '3'
 services:
-  postgresql:
-    image: postgres
+  database:
+    build: ./database
     environment:
       - POSTGRES_DB
       - POSTGRES_USER
       - POSTGRES_PASSWORD
+      - DB_USER_PW
     ports:
       - "5433:5433"
     volumes:
       - ./postgres-data/postgres:/var/lib/postgresql/data
     restart: always
+    healthcheck:
+      test: ["CMD", "test" ,"-f", "/var/lib/postgresql/data/ready.flag"]
+      interval: 1s
+      timeout: 1s
+      retries: 10
+      start_period: 1s
 # example:
 #    build: ./example
 #    links:
-#      - postgresql
+#      - database:
+#        condition: service_healthy
 #    ports:
 #      - "6200:6200"
 #    environment:
@@ -25,12 +33,15 @@ services:
   user:
     build: ./user
     links:
-      - postgresql
+      - database
+    depends_on:
+      database:
+        condition: service_healthy
     ports:
       - "5000:5000"
     environment:
       - SQLALCHEMY_DATABASE_URI=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgresql:5432/${POSTGRES_DB}
       - FLASK_ENV
+      - DB_PASSWORD${DB_USER_PW}
     volumes:
       - "./user/user:/opt/app"
-
