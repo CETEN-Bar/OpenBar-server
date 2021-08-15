@@ -77,7 +77,7 @@ userModel = api.model('User', {
         required=True,
         example=1,
         description='User\'s role identifier',
-        attribute= lambda x: x.role.get_pk()) ,
+        attribute= lambda x: x.role.get_pk() if type(x) != dict else x.get('role')) ,
     'username': fields.String(
         required=False,
         description='Username'),
