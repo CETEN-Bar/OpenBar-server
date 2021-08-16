@@ -56,9 +56,6 @@ class UserDAO(db.Entity):
                 'password':self.password
         }
 
-def test(x):
-    print(x)
-    return x.role.get_pk()
 
 userModel = api.model('User', {
     'id': fields.Integer(
@@ -84,8 +81,7 @@ userModel = api.model('User', {
         attribute= lambda x: x.role.get_pk() if type(x) != dict else x.get('role')) ,
     'username': fields.String(
         required=False,
-        description='Username',
-        attribute=test),
+        description='Username'),
     'password': fields.String(
         required=False,
         description='Password'),
@@ -115,7 +111,6 @@ class userList(Resource):
         payload['id_card'] = str(bcrypt.hashpw(str.encode(payload['id_card']),b'$2b$12$VMATDKC7/YGRh.SO5K5c3.'))
         user = UserDAO(**payload)
         user.role = user.role.id
-        print(user.role,file=sys.stderr)
         commit()
         return user, 201
 
