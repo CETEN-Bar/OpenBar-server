@@ -7,11 +7,12 @@ Main functions for the example microservice flask app
 
 import os
 from flask import Flask, g
+from pony.flask import Pony
+from tools.db import db, initdb
 
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from apis import apis
-from tools.db import db
 
 def create_app():
     """Return the flask app for the example microservice"""
@@ -19,12 +20,22 @@ def create_app():
     app.wsgi_app = ProxyFix(app.wsgi_app)
 
     app.config['RESTPLUS_VALIDATE'] = True
-
-    app.config['SQLALCHEMY_DATABASE_URI'] =  os.environ.get("SQLALCHEMY_DATABASE_URI", default="sqlite:///:memory:")
-    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {'future': True}
-    db.init_app(app)
     
     app.register_blueprint(apis)
+
+    app.config.update(dict(
+    PONY = {
+        'provider': 'postgres',
+        'host': 'database',
+        'database': 'example',
+        'port': '5432',
+        'password': os.environ.get('DB_PASSWORD'),
+        'user':'service_example'
+        }
+    ))
+    initdb(app)
+    Pony(app)
+
     return app
 
 
