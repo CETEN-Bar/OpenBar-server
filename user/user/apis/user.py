@@ -20,29 +20,24 @@ from tools.socketio import socketio
 
 from tools.auth import check_authorization
 from tools.db import db
-
+from apis.role import RoleDAO
 
 local_history= []
 
 api = Namespace('user', description='User')
 
 
-class RoleDAO(db.Entity):
-    _table_ = "role"
-    id = PrimaryKey(int, auto=True)
-    lib = Required(str)
-    user = Set("UserDAO")
-
 
 class UserDAO(db.Entity):
     """user object"""
     _table_ = "user_table"
     id = PrimaryKey(int, auto=True)
-    id_card = Required(str)
+    id_card = Required(str, unique=True)
     name = Required(str)
     fname = Required(str)
     balance = Required(int)
     role = Required(RoleDAO,column="bid")
+    group_year = Optional(int)
     username = Optional(str)
     password = Optional(str)
 
@@ -69,6 +64,11 @@ userModel = api.model('User', {
         example=1,
         description='User\'s role identifier',
         attribute= lambda x: x.role.get_pk() if type(x) != dict else x.get('role')) ,
+    'group_year': fields.Integer(
+        required=False,
+        example=2023,
+        description='User\'s group year'
+    ),
     'username': fields.String(
         required=False,
         description='Username'),

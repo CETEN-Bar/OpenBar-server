@@ -11,13 +11,18 @@ from dateutil import parser
 from flask_restx import Namespace, Resource, fields
 
 
-import bcrypt
 from pony.orm import *
-from .user import RoleDAO
-
-
 from tools.auth import check_authorization
 from tools.db import db
+
+class RoleDAO(db.Entity):
+    _table_ = "role"
+    id = PrimaryKey(int, auto=True)
+    lib = Required(str)
+    user = Set("UserDAO")
+
+from .user import RoleDAO
+
 
 
 api = Namespace('role', description='Role')
