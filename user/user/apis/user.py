@@ -108,7 +108,7 @@ class userList(Resource):
 
 @check_authorization
 @api.route("/<string:id_card>")
-@api.response(404, "task not found")
+@api.response(404, "user not found")
 @api.param("id_card", "The user card identifier")
 class User(Resource):
     """Show a single user item and lets you delete them"""
