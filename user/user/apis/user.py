@@ -15,6 +15,7 @@ from flask_socketio import send, SocketIO
 from flask import g
 import bcrypt
 import sys
+from apis import socketio
 
 
 from tools.auth import check_authorization
@@ -52,7 +53,7 @@ class UserDAO(db.Entity):
                 'name':self.name,
                 'fname':self.fname,
                 'balance':self.balance,
-                'role':self.role,
+                'role':self.role.id,
                 'username':self.username,
                 'password':self.password
         }
@@ -115,7 +116,7 @@ class userList(Resource):
         commit()
         return user, 201
 
-'''
+
 @check_authorization
 @api.route("/<string:id_card>")
 @api.response(404, "task not found")
@@ -128,17 +129,18 @@ class User(Resource):
     def get(self, id_card):
         """Fetch a given user"""
         try:
-            ses = get_session()
-            user = ses.execute(select(UserDAO).where(UserDAO.id_card == str(bcrypt.hashpw(str.encode(id_card),b'$2b$12$VMATDKC7/YGRh.SO5K5c3.')))).scalar_one()
+            user = UserDAO.select(lambda u : u.id_card == str(bcrypt.hashpw(str.encode(id_card),b'$2b$12$VMATDKC7/YGRh.SO5K5c3.'))).first()
             local_history.insert(0,user.name+" "+user.fname)
             socketio.send(user.to_json())
             return user
-        except exc.SQLAlchemyError:
+        except AttributeError:
+            print("foo",file=sys.stderr)
             socketio.send({'message':'new user'})
+            print("bar",file=sys.stderr)
             local_history.insert(0,"*******")
             
 
-
+'''
     @api.doc("delete_task")
     @api.response(204, "task deleted")
     def delete(self, id_card):

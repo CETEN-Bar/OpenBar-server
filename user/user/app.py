@@ -11,7 +11,8 @@ from flask_socketio import SocketIO
 from flask_restx import Api
 from tools.db import db, initdb
 from werkzeug.middleware.proxy_fix import ProxyFix
-from apis import socketio, apis
+from apis import apis, socketio
+
 
 def create_app():
     """Return the flask app for the example microservice"""
