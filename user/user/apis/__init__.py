@@ -9,6 +9,7 @@ from flask import Blueprint
 from flask_restx import Api
 from apis.role import api as nsrole
 from apis.user import api as nsuser
+from apis.salt import api as nsalt
 
 
 apis = Blueprint("apis", __name__, url_prefix="/api/v0")
@@ -20,5 +21,6 @@ api = Api(apis,
 
 api.add_namespace(nsuser, path='/user')
 api.add_namespace(nsrole, path='/role')
+api.add_namespace(nsalt, path='/salt')
 
 

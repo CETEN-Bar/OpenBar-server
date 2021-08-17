@@ -6,8 +6,6 @@ Inspired by
 https://github.com/python-restx/flask-restx/blob/master/examples/todomvc.py
 """
 
-from dateutil import parser
-
 from flask_restx import Namespace, Resource, fields
 
 

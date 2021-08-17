@@ -8,7 +8,8 @@ https://github.com/python-restx/flask-restx/blob/master/examples/todomvc.py
 
 from typing import Optional
 from dateutil import parser
-
+import requests
+from datetime import date
 from flask_restx import Namespace, Resource, fields
 from pony.orm import *
 from flask_socketio import send, SocketIO
@@ -21,6 +22,7 @@ from tools.socketio import socketio
 from tools.auth import check_authorization
 from tools.db import db
 from apis.role import RoleDAO
+from apis.salt import SaltDAO
 
 local_history= []
 
@@ -37,6 +39,7 @@ class UserDAO(db.Entity):
     fname = Required(str)
     balance = Required(int)
     role = Required(RoleDAO,column="bid")
+    salt_year = Required(SaltDAO,column="sid")
     group_year = Optional(int)
     username = Optional(str)
     password = Optional(str)
@@ -64,6 +67,10 @@ userModel = api.model('User', {
         example=1,
         description='User\'s role identifier',
         attribute= lambda x: x.role.get_pk() if type(x) != dict else x.get('role')) ,
+    'salt_year': fields.Integer(
+        required=True,
+        description='Salt year',
+        attribute= lambda x: x.salt_year.get_pk() if type(x) != dict else x.get('salt_year')) ,
     'group_year': fields.Integer(
         required=False,
         example=2023,
@@ -99,11 +106,20 @@ class userList(Resource):
     def post(self):
         """Create a new user"""
         payload = api.payload
-        payload['id_card'] = str(bcrypt.hashpw(str.encode(payload['id_card']),b'$2b$12$VMATDKC7/YGRh.SO5K5c3.'))
-        user = UserDAO(**payload)
-        user.role = user.role.id
-        commit()
-        return user, 201
+
+        try:
+            check = SaltDAO[date.today().year].id
+        except pony.orm.core.ObjectNotFound :
+            myobj = {"id": date.today().year, "salt": str(bcrypt.gensalt())[1:].replace('\'','')}
+            r = SaltDAO(**myobj)
+            commit()
+        finally:
+            payload['id_card'] = str(bcrypt.hashpw(str.encode(payload['id_card']),bytes(SaltDAO[date.today().year].salt.replace('"', '\''),encoding='utf8')))
+            payload['salt_year']=date.today().year
+            user = UserDAO(**payload)
+            user.role = user.role.id
+            commit()
+            return user, 201
 
 
 @check_authorization
@@ -117,15 +133,17 @@ class User(Resource):
     @socketio.on("message")
     def get(self, id_card):
         """Fetch a given user"""
-        try:
-            user = UserDAO.select(lambda u : u.id_card == str(bcrypt.hashpw(str.encode(id_card),b'$2b$12$VMATDKC7/YGRh.SO5K5c3.'))).first()
-            local_history.insert(0,user.name+" "+user.fname)
-            socketio.send(user.to_dict())
-            return user
-        except AttributeError:
-            socketio.send({'message':'new user'})
-            local_history.insert(0,"*******")
-            api.abort(404, f"User with id card {id_card} doesn't exist")
+        slist = SaltDAO.select().order_by(desc(1))
+        for s in slist:
+            salt = bytes(s.salt.replace('"', '\''),encoding='utf8')
+            user = UserDAO.select(lambda u :u.salt_year.id == s.id and u.id_card == str(bcrypt.hashpw(str.encode(id_card),salt))).first()
+            if user:
+                local_history.insert(0,user.name+" "+user.fname)
+                socketio.send(user.to_dict())
+                return user
+        socketio.send({'message':'new user'})
+        local_history.insert(0,"*******")
+        api.abort(404, f"User with id card {id_card} doesn't exist")
             
 
 
