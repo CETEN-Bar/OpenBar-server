@@ -12,7 +12,7 @@ from dateutil import parser
 from flask_restx import Namespace, Resource, fields
 from pony.orm import *
 from flask_socketio import send, SocketIO
-from . import socketio
+from flask import g
 import bcrypt
 import sys
 
@@ -24,6 +24,7 @@ from tools.db import db
 local_history= []
 
 api = Namespace('user', description='User')
+
 
 class RoleDAO(db.Entity):
     _table_ = "role"

@@ -5,35 +5,44 @@
 Core initialisation of the API
 """
 
-from flask import Blueprint,Flask,g
 import os
-from flask_restx import Api
-from flask_socketio import SocketIO
+from flask import Flask, g, Blueprint
 from pony.flask import Pony
-from tools.db import db
+from flask_socketio import SocketIO
+from flask_restx import Api
+from tools.db import db, initdb
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-"""Return the flask app for the example microservice"""
-app = Flask(__name__)
-app.wsgi_app = ProxyFix(app.wsgi_app)
+socketio = SocketIO(cors_allowed_origins="*")
+def create_app():
+    """Return the flask app for the example microservice"""
+    app = Flask(__name__)
+    app.wsgi_app = ProxyFix(app.wsgi_app)
 
-app.config['RESTPLUS_VALIDATE'] = True
+    app.config['RESTPLUS_VALIDATE'] = True
+    
+    app.register_blueprint(apis)
 
-app.config.update(dict(
-    DEBUG = False,
-    SECRET_KEY = 'testo',
-    PONY = {
-        'provider': 'postgres',
-        'host': 'database',
-        'database': 'user',
-        'port': '5432',
-        'password': os.environ.get('DB_PASSWORD'),
-        'user':'service_user'
-    }
-))
+    app.config.update(dict(
+        DEBUG = False,
+        SECRET_KEY = 'testo',
+        PONY = {
+            'provider': 'postgres',
+            'host': 'database',
+            'database': 'user',
+            'port': '5432',
+            'password': os.environ.get('DB_PASSWORD'),
+            'user':'service_user'
+        }
+    ))
+    initdb(app)
+    Pony(app)
+    socketio.init_app(app)
+    return app
 
 
-socketio = SocketIO(app,cors_allowed_origins="*")
+
+
 
 
 from apis.role import api as nsrole
@@ -50,7 +59,3 @@ api = Api(apis,
 api.add_namespace(nsuser, path='/user')
 api.add_namespace(nsrole, path='/role')
 
-app.register_blueprint(apis)
-db.bind(**app.config['PONY'])
-db.generate_mapping(create_tables=True)
-Pony(app)
