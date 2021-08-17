@@ -15,7 +15,7 @@ from flask_socketio import send, SocketIO
 from flask import g
 import bcrypt
 import sys
-from apis import socketio
+from tools.socketio import socketio
 
 
 from tools.auth import check_authorization
@@ -45,18 +45,6 @@ class UserDAO(db.Entity):
     role = Required(RoleDAO,column="bid")
     username = Optional(str)
     password = Optional(str)
-
-    def to_json(self):
-        return {
-                'id':self.id,
-                'id_card':self.id_card,
-                'name':self.name,
-                'fname':self.fname,
-                'balance':self.balance,
-                'role':self.role.id,
-                'username':self.username,
-                'password':self.password
-        }
 
 
 userModel = api.model('User', {
@@ -88,6 +76,7 @@ userModel = api.model('User', {
         required=False,
         description='Password'),
 })
+
 
 @check_authorization
 @api.route("/")
@@ -123,7 +112,7 @@ class userList(Resource):
 @api.param("id_card", "The user card identifier")
 class User(Resource):
     """Show a single user item and lets you delete them"""
-    @api.doc("get_task")
+    @api.doc("get_user")
     @api.marshal_with(userModel)
     @socketio.on("message")
     def get(self, id_card):
@@ -131,23 +120,24 @@ class User(Resource):
         try:
             user = UserDAO.select(lambda u : u.id_card == str(bcrypt.hashpw(str.encode(id_card),b'$2b$12$VMATDKC7/YGRh.SO5K5c3.'))).first()
             local_history.insert(0,user.name+" "+user.fname)
-            socketio.send(user.to_json())
+            socketio.send(user.to_dict())
             return user
         except AttributeError:
-            print("foo",file=sys.stderr)
             socketio.send({'message':'new user'})
-            print("bar",file=sys.stderr)
             local_history.insert(0,"*******")
+            api.abort(404, f"User with id card {id_card} doesn't exist")
             
 
-'''
-    @api.doc("delete_task")
+
+    @api.doc("delete_user")
     @api.response(204, "task deleted")
     def delete(self, id_card):
         """Delete a user given its identifier"""
-        ses = get_session()
-        ses.execute(delete(UserDAO).where(UserDAO.id_card == str(bcrypt.hashpw(str.encode(id_card),b'$2b$12$VMATDKC7/YGRh.SO5K5c3.'))))
-        ses.commit()
+        try:
+            UserDAO.select(lambda u : u.id_card == str(bcrypt.hashpw(str.encode(id_card),b'$2b$12$VMATDKC7/YGRh.SO5K5c3.'))).first().delete()
+            commit()
+        except pony.orm.core.ObjectNotFound:
+            api.abort(404, f"User with id card {id_card} doesn't exist")
         return "", 204
 
     @api.expect(userModel)
@@ -157,10 +147,16 @@ class User(Resource):
         payload = api.payload
         if 'id' in payload:
             payload.pop('id')
-        ses = get_session()
-        ses.execute(update(UserDAO).where(UserDAO.id_card == str(bcrypt.hashpw(str.encode(id_card),b'$2b$12$VMATDKC7/YGRh.SO5K5c3.'))).values(payload))
-        ses.commit()
-        return ses.execute(select(UserDAO).where(UserDAO.id_card == str(bcrypt.hashpw(str.encode(id_card),b'$2b$12$VMATDKC7/YGRh.SO5K5c3.')))).scalar_one()
+        if 'id_card' in payload:
+            payload.pop('id_card')
+        user = UserDAO.select(lambda u : u.id_card == str(bcrypt.hashpw(str.encode(id_card),b'$2b$12$VMATDKC7/YGRh.SO5K5c3.'))).first()
+        try:
+           user.set(**payload)
+        except pony.orm.core.ObjectNotFound:
+            api.abort(404, f"User {id} doesn't exist")
+        commit()
+        return user
+
 
 @check_authorization
 @api.route("/history")
@@ -172,4 +168,3 @@ class History(Resource):
         return local_history
             
 
-'''

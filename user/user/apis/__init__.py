@@ -6,12 +6,7 @@ Core initialisation of the API
 """
 
 from flask import Blueprint
-from flask_socketio import SocketIO
 from flask_restx import Api
-
-socketio = SocketIO(cors_allowed_origins="*")
-
-
 from apis.role import api as nsrole
 from apis.user import api as nsuser
 
@@ -25,4 +20,5 @@ api = Api(apis,
 
 api.add_namespace(nsuser, path='/user')
 api.add_namespace(nsrole, path='/role')
+
 

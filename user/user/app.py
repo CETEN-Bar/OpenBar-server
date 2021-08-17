@@ -7,12 +7,11 @@ Main functions for the example microservice flask app
 import os
 from flask import Flask, g
 from pony.flask import Pony
-from flask_socketio import SocketIO
 from flask_restx import Api
 from tools.db import db, initdb
+from tools.socketio import socketio
 from werkzeug.middleware.proxy_fix import ProxyFix
-from apis import apis, socketio
-
+from apis import apis
 
 def create_app():
     """Return the flask app for the example microservice"""

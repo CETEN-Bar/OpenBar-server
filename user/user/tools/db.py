@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-Set of function initialize sqlalchemy
+Set of function initialize pony
 """
 
 from flask import g

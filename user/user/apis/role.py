@@ -14,8 +14,7 @@ from flask_restx import Namespace, Resource, fields
 import bcrypt
 from pony.orm import *
 from .user import RoleDAO
-import sys
-import json
+
 
 from tools.auth import check_authorization
 from tools.db import db
