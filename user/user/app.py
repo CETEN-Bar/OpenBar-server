@@ -9,9 +9,10 @@ from flask import Flask, g
 from pony.flask import Pony
 from flask_restx import Api
 from tools.db import db, initdb
-from tools.socketio import socketio
 from werkzeug.middleware.proxy_fix import ProxyFix
 from apis import apis
+from flask_cors import CORS
+
 
 def create_app():
     """Return the flask app for the example microservice"""
@@ -35,12 +36,11 @@ def create_app():
         }
     ))
     initdb(app)
+    CORS(app)
     Pony(app)
-    socketio.init_app(app)
     return app
 
 
 
 if __name__ == '__main__':
-    app = create_app()
-    socketio.run(app)
+    create_app().run(debug=True)

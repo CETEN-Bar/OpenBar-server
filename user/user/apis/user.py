@@ -12,11 +12,9 @@ import requests
 from datetime import date
 from flask_restx import Namespace, Resource, fields
 from pony.orm import *
-from flask_socketio import send, SocketIO
 from flask import g
 import bcrypt
 import sys
-from tools.socketio import socketio
 
 
 from tools.auth import check_authorization
@@ -106,7 +104,6 @@ class userList(Resource):
     def post(self):
         """Create a new user"""
         payload = api.payload
-
         try:
             check = SaltDAO[date.today().year].id
         except pony.orm.core.ObjectNotFound :
@@ -130,7 +127,6 @@ class User(Resource):
     """Show a single user item and lets you delete them"""
     @api.doc("get_user")
     @api.marshal_with(userModel)
-    @socketio.on("message")
     def get(self, id_card):
         """Fetch a given user"""
         slist = SaltDAO.select().order_by(desc(1))
@@ -139,9 +135,7 @@ class User(Resource):
             user = UserDAO.select(lambda u :u.salt_year.id == s.id and u.id_card == str(bcrypt.hashpw(str.encode(id_card),salt))).first()
             if user:
                 local_history.insert(0,user.name+" "+user.fname)
-                socketio.send(user.to_dict())
                 return user
-        socketio.send({'message':'new user'})
         local_history.insert(0,"*******")
         api.abort(404, f"User with id card {id_card} doesn't exist")
             
