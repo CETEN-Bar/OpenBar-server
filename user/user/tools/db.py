@@ -2,19 +2,21 @@
 # -*- coding: utf-8 -*-
 
 """
-Set of function initialize sqlalchemy
+Set of function initialize pony
 """
 
 from flask import g
-from flask_sqlalchemy import SQLAlchemy
+from pony.orm import *
 
-db = SQLAlchemy()
+db = Database()
 
-def get_session():
-    """Return the session of the db
-    and initialize  the db if necessery
-    """
-    if getattr(g, '_db_init', None) == None:
-        db.create_all()
-        g._db_init = True
-    return db.session
+binded = False
+
+def initdb(app):
+    "Initialise and connect to the database if necessary"
+    global binded
+    if not binded:
+        db.bind(**app.config['PONY'])
+        db.generate_mapping(create_tables=True)
+        binded = True
+

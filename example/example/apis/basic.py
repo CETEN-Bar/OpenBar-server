@@ -92,7 +92,7 @@ class TaskList(Resource):
 
     @api.doc("create_task")
     @api.expect(taskModel, validate=True)
-    @api.marshal_with(taskModel, code=201)
+    @api.marshal_with(taskModel)
     def post(self):
         """Create a new task"""
         return taskDAO.create(api.payload), 201

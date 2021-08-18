@@ -8,23 +8,24 @@ https://github.com/python-restx/flask-restx/blob/master/examples/todomvc.py
 """
 
 from dateutil import parser
+from datetime import datetime
 
 from flask_restx import Namespace, Resource, fields
-from sqlalchemy import select, delete, update
+from pony.orm import *
 
 from tools.auth import check_authorization
-from tools.db import db, get_session
+from tools.db import db
 
 api = Namespace('db', description='Example API with db access')
 
-class TaskDAO(db.Model):
+class Task(db.Entity):
     """Object Database of a task"""
     __tablename__ = 'task'
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String, nullable=False)
-    description = db.Column(db.String)
-    deadline_date = db.Column(db.DateTime)
-    done = db.Column(db.Boolean, nullable=False)
+    id = PrimaryKey(int, auto=True)
+    name = Required(str)
+    description = Optional(str)
+    deadline_date = Optional(datetime)
+    done = Required(bool)
 
 
 taskModel = api.model('task', {
@@ -50,36 +51,36 @@ taskModel = api.model('task', {
 
 @check_authorization
 @api.route("/")
-class TaskList(Resource):
+class TaskListAPI(Resource):
     """Shows a list of all tasks, and lets you POST to add new tasks"""
     @api.doc("list_tasks")
     @api.marshal_list_with(taskModel)
     def get(self):
         """List all tasks"""
-        tasks = get_session().execute(select(TaskDAO)).scalars().all()
-        return tasks
+        tasks = Task.select()
+        return [t.to_dict() for t in tasks]
 
+    @db_session
     @api.doc("delete_tasks")
     @api.response(204, "tasks deleted")
     def delete(self):
         """Delete all tasks"""
-        ses = get_session()
-        ses.execute(delete(TaskDAO))
-        ses.commit()
+        Task.select().delete(bulk=True)
         return "", 204
 
+    @db_session
     @api.doc("create_task")
     @api.expect(taskModel, validate=True)
-    @api.marshal_with(taskModel, code=201)
+    @api.marshal_with(taskModel)
     def post(self):
         """Create a new task"""
-        payload = api.payload
+        payload = {x: api.payload[x] for x in api.payload if x in taskModel}
+        if 'id' in payload:
+            payload.pop('id')
         if 'deadline_date' in payload:
             payload['deadline_date'] = parser.isoparse(payload['deadline_date'])
-        task = TaskDAO(**payload)
-        ses = get_session()
-        ses.add(task)
-        ses.commit()
+        task = Task(**payload)
+        commit()
         return task, 201
 
 
@@ -87,36 +88,42 @@ class TaskList(Resource):
 @api.route("/<int:id>")
 @api.response(404, "task not found")
 @api.param("id", "The task identifier")
-class Task(Resource):
+class TaskAPI(Resource):
     """Show a single task item and lets you delete them"""
     @api.doc("get_task")
     @api.marshal_with(taskModel)
     def get(self, id):
         """Fetch a given task"""
-        ses = get_session()
-        task = ses.execute(select(TaskDAO).where(TaskDAO.id == id)).scalar_one()
+        try:
+            task = Task[id]
+        except pony.orm.core.ObjectNotFound:
+            api.abort(404, f"Task {id} doesn't exist")
         return task
 
     @api.doc("delete_task")
     @api.response(204, "task deleted")
     def delete(self, id):
         """Delete a task given its identifier"""
-        ses = get_session()
-        ses.execute(delete(TaskDAO).where(TaskDAO.id == id))
-        ses.commit()
+        try:
+            Task[id].delete()
+        except pony.orm.core.ObjectNotFound:
+            api.abort(404, f"Task {id} doesn't exist")
         return "", 204
 
     @api.expect(taskModel)
     @api.marshal_with(taskModel)
     def put(self, id):
         """Update a task given its identifier"""
-        payload = api.payload
+        payload = {x: api.payload[x] for x in api.payload if x in taskModel}
+        print(payload)
         if 'id' in payload:
             payload.pop('id')
-        ses = get_session()
-        ses.execute(update(TaskDAO).where(TaskDAO.id == id).values(payload))
-        ses.commit()
-        return ses.execute(select(TaskDAO).where(TaskDAO.id == id)).scalar_one()
+        try:
+            Task[id].set(**payload)
+        except pony.orm.core.ObjectNotFound:
+            api.abort(404, f"Task {id} doesn't exist")
+        commit()
+        return Task[id]
 
 # Original Licence of https://github.com/python-restx/flask-restx/blob/master/examples/todomvc.py
 

@@ -6,55 +6,41 @@ Inspired by
 https://github.com/python-restx/flask-restx/blob/master/examples/todomvc.py
 """
 
+from typing import Optional
 from dateutil import parser
 
 from flask_restx import Namespace, Resource, fields
-from sqlalchemy import select, delete, update,ForeignKey,exc
-from sqlalchemy.orm import relationship
+from pony.orm import *
 from flask_socketio import send, SocketIO
-from . import socketio
+from flask import g
 import bcrypt
 import sys
+from tools.socketio import socketio
 
 
 from tools.auth import check_authorization
-from tools.db import db, get_session
-
+from tools.db import db
+from apis.role import RoleDAO
 
 local_history= []
 
 api = Namespace('user', description='User')
 
-class RoleDAO(db.Model):
-    """role object"""
-    __tablename__ = 'role'
-    id = db.Column(db.Integer, primary_key=True)
-    lib = db.Column(db.String,nullable=False)
-    child = relationship('UserDAO')
 
-class UserDAO(db.Model):
+
+class UserDAO(db.Entity):
     """user object"""
-    __tablename__ = 'user_table'
-    id = db.Column(db.Integer, primary_key=True,autoincrement=True)
-    id_card = db.Column(db.String, nullable=False)
-    name = db.Column(db.String, nullable=False)
-    fname = db.Column(db.String, nullable=False)
-    balance = db.Column(db.Integer, nullable=False)
-    role = db.Column(db.Integer,ForeignKey('role.id'),nullable=False)
-    username = db.Column(db.String)
-    password = db.Column(db.String)
+    _table_ = "user_table"
+    id = PrimaryKey(int, auto=True)
+    id_card = Required(str, unique=True)
+    name = Required(str)
+    fname = Required(str)
+    balance = Required(int)
+    role = Required(RoleDAO,column="bid")
+    group_year = Optional(int)
+    username = Optional(str)
+    password = Optional(str)
 
-    def to_json(self):
-        return {
-                'id':self.id,
-                'id_card':self.id_card,
-                'name':self.name,
-                'fname':self.fname,
-                'balance':self.balance,
-                'role':self.role,
-                'username':self.username,
-                'password':self.password
-        }
 
 userModel = api.model('User', {
     'id': fields.Integer(
@@ -76,7 +62,13 @@ userModel = api.model('User', {
     'role': fields.Integer(
         required=True,
         example=1,
-        description='User\'s role identifier'),
+        description='User\'s role identifier',
+        attribute= lambda x: x.role.get_pk() if type(x) != dict else x.get('role')) ,
+    'group_year': fields.Integer(
+        required=False,
+        example=2023,
+        description='User\'s group year'
+    ),
     'username': fields.String(
         required=False,
         description='Username'),
@@ -92,63 +84,60 @@ class userList(Resource):
     """Shows a list of all user"""
     @api.doc("list_user")
     @api.marshal_list_with(userModel)
+    @db_session
     def get(self):
         """List all user"""
-        users = get_session().execute(select(UserDAO)).scalars().all()
-        return users
+        users = UserDAO.select()
+        result = {'data': [p.to_dict() for p in users]}
+        return result['data']
 
-    @api.doc("delete_user")
-    @api.response(204, "user deleted")
-    def delete(self):
-        """Delete all user"""
-        ses = get_session()
-        ses.execute(delete(UserDAO))
-        ses.commit()
-        return "", 204
 
     @api.doc("create_user")
-    @api.expect(userModel, validate=True)
+    @api.expect(userModel, validate=False)
     @api.marshal_with(userModel, code=201)
+    @db_session
     def post(self):
         """Create a new user"""
         payload = api.payload
         payload['id_card'] = str(bcrypt.hashpw(str.encode(payload['id_card']),b'$2b$12$VMATDKC7/YGRh.SO5K5c3.'))
         user = UserDAO(**payload)
-        ses = get_session()
-        ses.add(user)
-        ses.commit()
+        user.role = user.role.id
+        commit()
         return user, 201
 
 
 @check_authorization
 @api.route("/<string:id_card>")
-@api.response(404, "task not found")
+@api.response(404, "user not found")
 @api.param("id_card", "The user card identifier")
 class User(Resource):
     """Show a single user item and lets you delete them"""
-    @api.doc("get_task")
+    @api.doc("get_user")
     @api.marshal_with(userModel)
     @socketio.on("message")
     def get(self, id_card):
         """Fetch a given user"""
         try:
-            ses = get_session()
-            user = ses.execute(select(UserDAO).where(UserDAO.id_card == str(bcrypt.hashpw(str.encode(id_card),b'$2b$12$VMATDKC7/YGRh.SO5K5c3.')))).scalar_one()
+            user = UserDAO.select(lambda u : u.id_card == str(bcrypt.hashpw(str.encode(id_card),b'$2b$12$VMATDKC7/YGRh.SO5K5c3.'))).first()
             local_history.insert(0,user.name+" "+user.fname)
-            socketio.send(user.to_json())
+            socketio.send(user.to_dict())
             return user
-        except exc.SQLAlchemyError:
+        except AttributeError:
+            socketio.send({'message':'new user'})
             local_history.insert(0,"*******")
+            api.abort(404, f"User with id card {id_card} doesn't exist")
             
 
 
-    @api.doc("delete_task")
+    @api.doc("delete_user")
     @api.response(204, "task deleted")
     def delete(self, id_card):
         """Delete a user given its identifier"""
-        ses = get_session()
-        ses.execute(delete(UserDAO).where(UserDAO.id_card == str(bcrypt.hashpw(str.encode(id_card),b'$2b$12$VMATDKC7/YGRh.SO5K5c3.'))))
-        ses.commit()
+        try:
+            UserDAO.select(lambda u : u.id_card == str(bcrypt.hashpw(str.encode(id_card),b'$2b$12$VMATDKC7/YGRh.SO5K5c3.'))).first().delete()
+            commit()
+        except pony.orm.core.ObjectNotFound:
+            api.abort(404, f"User with id card {id_card} doesn't exist")
         return "", 204
 
     @api.expect(userModel)
@@ -158,10 +147,16 @@ class User(Resource):
         payload = api.payload
         if 'id' in payload:
             payload.pop('id')
-        ses = get_session()
-        ses.execute(update(UserDAO).where(UserDAO.id_card == str(bcrypt.hashpw(str.encode(id_card),b'$2b$12$VMATDKC7/YGRh.SO5K5c3.'))).values(payload))
-        ses.commit()
-        return ses.execute(select(UserDAO).where(UserDAO.id_card == str(bcrypt.hashpw(str.encode(id_card),b'$2b$12$VMATDKC7/YGRh.SO5K5c3.')))).scalar_one()
+        if 'id_card' in payload:
+            payload.pop('id_card')
+        user = UserDAO.select(lambda u : u.id_card == str(bcrypt.hashpw(str.encode(id_card),b'$2b$12$VMATDKC7/YGRh.SO5K5c3.'))).first()
+        try:
+           user.set(**payload)
+        except pony.orm.core.ObjectNotFound:
+            api.abort(404, f"User {id} doesn't exist")
+        commit()
+        return user
+
 
 @check_authorization
 @api.route("/history")
@@ -171,41 +166,5 @@ class History(Resource):
     def get(self):
         """Fetch the history"""
         return local_history
-
             
 
-
-# Original Licence of https://github.com/python-restx/flask-restx/blob/master/examples/todomvc.py
-
-# BSD 3-Clause License
-
-# Original work Copyright (c) 2013 Twilio, Inc
-# Modified work Copyright (c) 2014 Axel Haustant
-# Modified work Copyright (c) 2020 python-restx Authors
-
-# All rights reserved.
-
-# Redistribution and use in source and binary forms, with or without
-# modification, are permitted provided that the following conditions are met:
-
-# * Redistributions of source code must retain the above copyright notice, this
-#   list of conditions and the following disclaimer.
-
-# * Redistributions in binary form must reproduce the above copyright notice,
-#   this list of conditions and the following disclaimer in the documentation
-#   and/or other materials provided with the distribution.
-
-# * Neither the name of the copyright holder nor the names of its
-#   contributors may be used to endorse or promote products derived from
-#   this software without specific prior written permission.
-
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
