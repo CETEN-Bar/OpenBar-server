@@ -5,15 +5,6 @@
 Set of function to manage the database
 """
 
-from pony.orm import Database
+from playhouse.flask_utils import FlaskDB
 
-db = Database()
-binded = False
-
-def initdb(app):
-    "Initialise and connect to the database if necessary"
-    global binded
-    if not binded:
-        db.bind(**app.config['PONY'])
-        db.generate_mapping(create_tables=True)
-        binded = True
+db_wrapper = FlaskDB()

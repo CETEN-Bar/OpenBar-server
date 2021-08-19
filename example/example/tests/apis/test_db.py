@@ -28,7 +28,7 @@ EXAMPLE_MINIMAL = \
 
 def random_string():
     """Return a radom string"""
-    return ''.join(random.choices(string.ascii_letters, k=random.randint(1, 50)))
+    return ''.join(random.choices(string.ascii_letters, k=random.randint(0, 50)))
 
 def random_boolean():
     """Return a radom boolean"""

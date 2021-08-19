@@ -30,4 +30,4 @@ services:
         condition: service_healthy
     environment:
       - FLASK_ENV
-      - DB_PASSWORD=${DB_SERVICE_EXAMPLE_PW}
+      - DATABASE=postgresql://service_example:${DB_SERVICE_EXAMPLE_PW}@database:5432/example

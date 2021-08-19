@@ -11,21 +11,22 @@ from dateutil import parser
 from datetime import datetime
 
 from flask_restx import Namespace, Resource, fields
-from pony.orm import *
+from peewee import *
+from playhouse.shortcuts import model_to_dict
 
 from tools.auth import check_authorization
-from tools.db import db
+from tools.db import db_wrapper
 
 api = Namespace('db', description='Example API with db access')
 
-class Task(db.Entity):
+class Task(db_wrapper.Model):
     """Object Database of a task"""
     __tablename__ = 'task'
-    id = PrimaryKey(int, auto=True)
-    name = Required(str)
-    description = Optional(str)
-    deadline_date = Optional(datetime)
-    done = Required(bool)
+    id = AutoField()
+    name = CharField()
+    description = TextField(null=True)
+    deadline_date = DateTimeField(null=True)
+    done = BooleanField()
 
 
 taskModel = api.model('task', {
@@ -58,17 +59,15 @@ class TaskListAPI(Resource):
     def get(self):
         """List all tasks"""
         tasks = Task.select()
-        return [t.to_dict() for t in tasks]
+        return [model_to_dict(t) for t in tasks]
 
-    @db_session
     @api.doc("delete_tasks")
     @api.response(204, "tasks deleted")
     def delete(self):
         """Delete all tasks"""
-        Task.select().delete(bulk=True)
+        Task.delete().execute()
         return "", 204
 
-    @db_session
     @api.doc("create_task")
     @api.expect(taskModel, validate=True)
     @api.marshal_with(taskModel)
@@ -80,8 +79,8 @@ class TaskListAPI(Resource):
         if 'deadline_date' in payload:
             payload['deadline_date'] = parser.isoparse(payload['deadline_date'])
         task = Task(**payload)
-        commit()
-        return task, 201
+        task.save()
+        return model_to_dict(task), 201
 
 
 @check_authorization
@@ -96,17 +95,17 @@ class TaskAPI(Resource):
         """Fetch a given task"""
         try:
             task = Task[id]
-        except pony.orm.core.ObjectNotFound:
+        except Task.DoesNotExist:
             api.abort(404, f"Task {id} doesn't exist")
-        return task
+        return model_to_dict(task)
 
     @api.doc("delete_task")
     @api.response(204, "task deleted")
     def delete(self, id):
         """Delete a task given its identifier"""
         try:
-            Task[id].delete()
-        except pony.orm.core.ObjectNotFound:
+            Task[id].delete_instance()
+        except Task.DoesNotExist:
             api.abort(404, f"Task {id} doesn't exist")
         return "", 204
 
@@ -115,15 +114,19 @@ class TaskAPI(Resource):
     def put(self, id):
         """Update a task given its identifier"""
         payload = {x: api.payload[x] for x in api.payload if x in taskModel}
-        print(payload)
         if 'id' in payload:
             payload.pop('id')
         try:
-            Task[id].set(**payload)
-        except pony.orm.core.ObjectNotFound:
+            if len(payload) == 0:
+                return model_to_dict(Task[id])
+            Task.update(**payload).where(Task.id == id).execute()
+            return model_to_dict(Task[id])
+        except Task.DoesNotExist:
             api.abort(404, f"Task {id} doesn't exist")
-        commit()
-        return Task[id]
+
+def create_tables():
+    "Create tables for this file"
+    db_wrapper.database.create_tables([Task])
 
 # Original Licence of https://github.com/python-restx/flask-restx/blob/master/examples/todomvc.py
 

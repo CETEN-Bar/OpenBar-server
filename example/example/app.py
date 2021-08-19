@@ -7,12 +7,12 @@ Main functions for the example microservice flask app
 
 import os
 from flask import Flask, g
-from pony.flask import Pony
-from tools.db import db, initdb
+from tools.db import db_wrapper
 
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from apis import apis
+from apis import create_tables as create_tables_apis
 
 def create_app():
     """Return the flask app for the example microservice"""
@@ -23,18 +23,11 @@ def create_app():
     
     app.register_blueprint(apis)
 
-    app.config.update(dict(
-    PONY = {
-        'provider': 'postgres',
-        'host': 'database',
-        'database': 'example',
-        'port': '5432',
-        'password': os.environ.get('DB_PASSWORD'),
-        'user':'service_example'
-        }
-    ))
-    initdb(app)
-    Pony(app)
+    app.config['DATABASE'] = os.environ.get('DATABASE', default="sqlite:///:memory:")
+    db_wrapper.init_app(app)
+
+    with db_wrapper.database.connection_context():
+        create_tables_apis()
 
     return app
 
