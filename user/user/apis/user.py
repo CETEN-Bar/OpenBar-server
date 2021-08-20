@@ -7,37 +7,34 @@ https://github.com/python-restx/flask-restx/blob/master/examples/todomvc.py
 """
 
 import sys
-from typing import Optional
-from dateutil import parser
 import bcrypt
+import requests
+from dateutil import parser
+from datetime import date
 
-from flask import g
 from flask_restx import Namespace, Resource, fields
 from peewee import *
 from playhouse.shortcuts import model_to_dict
-from flask_socketio import send, SocketIO
-from tools.socketio import socketio
 
 from tools.auth import check_authorization
 from tools.db import db_wrapper
 from apis.role import Role
+from apis.salt import Salt
 
 local_history = []
 
 api = Namespace('user', description='User')
 
-
-
 class User(db_wrapper.Model):
     """user object"""
-    _table_ = "user_table"
     id = AutoField()
     id_card = CharField(unique=True)
     name = CharField()
     fname = CharField()
     balance = IntegerField()
     role = ForeignKeyField(Role, backref="users")
-    group_year = IntegerField()
+    salt = ForeignKeyField(Salt, backref="users")
+    group_year = IntegerField(null=True)
     username = CharField(null=True)
     password = CharField(null=True)
 
@@ -64,6 +61,10 @@ userModel = api.model('User', {
         example=1,
         description='User\'s role identifier',
         attribute= lambda x: x if type(x) != dict else x['role']['id']),
+    'salt_year': fields.Integer(
+        required=True,
+        description='Salt year',
+        attribute= lambda x: x if type(x) != dict else x['salt']['year']),
     'group_year': fields.Integer(
         required=False,
         example=2023,
@@ -98,14 +99,18 @@ class UserListAPI(Resource):
         payload = {x: api.payload[x] for x in api.payload if x in userModel}
         if 'id' in payload:
             payload.pop('id')
-        payload['id_card'] = str(bcrypt.hashpw(str.encode(payload['id_card']),b'$2b$12$VMATDKC7/YGRh.SO5K5c3.'))
+        try:
+            payload['salt'] = Salt[date.today().year]
+        except Salt.DoesNotExist:
+            myobj = {"year": date.today().year, "salt": str(bcrypt.gensalt())[1:].replace('\'','')}
+            payload['salt'] = Salt(**myobj)
+            payload['salt'].save()
+        payload['id_card'] =  str(bcrypt.hashpw(str.encode(payload['id_card']),bytes(payload['salt'].salt.replace('"', '\''),encoding='utf8')))
         userobj = User(**payload)
         userobj.save()
         user = model_to_dict(userobj)
-        print(user)
         user['role'] = userobj.role.id
         return user, 201
-
 
 @check_authorization
 @api.route("/<string:id_card>")
@@ -115,23 +120,18 @@ class UserAPI(Resource):
     """Show a single user item and lets you delete them"""
     @api.doc("get_user")
     @api.marshal_with(userModel)
-    @socketio.on("message")
     def get(self, id_card):
         """Fetch a given user"""
-        user_id = False
-        for u in User.select(User.id, User.id_card):
-            if u.id_card == str(bcrypt.hashpw(str.encode(id_card),b'$2b$12$VMATDKC7/YGRh.SO5K5c3.')):
-                user_id = u.id
-                break
-        if not user_id:
-            socketio.send({'message':'new user'})
-            local_history.insert(0,"*******")
-            api.abort(404, f"User with id card {id_card} doesn't exist")
-        user = User[user_id]
-        local_history.insert(0,user.name + " " + user.fname)
-        user = model_to_dict(user)
-        socketio.send(user)
-        return user
+        slist = Salt.select().order_by(Salt.id.desc())
+        for s in slist:
+            salt = bytes(s.salt.replace('"', '\''), encoding='utf8')
+            users = User.select(User.salt.year == s.year and User.id_card == str(bcrypt.hashpw(str.encode(id_card), salt)))
+            if users.count() > 0:
+                user = users[0]
+                local_history.insert(0, user.name + " " + user.fname)
+                return model_to_dict(user)
+        local_history.insert(0, "*******")
+        api.abort(404, f"User with id card {id_card} doesn't exist")
 
 
     @api.doc("delete_user")
@@ -171,4 +171,4 @@ class History(Resource):
 
 def create_tables():
     "Create tables for this file"
-    db_wrapper.database.create_tables([User])
+    db_wrapper.database.create_tables([Salt, User])
