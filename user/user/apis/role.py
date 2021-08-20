@@ -10,24 +10,19 @@ from dateutil import parser
 
 from flask_restx import Namespace, Resource, fields
 
+from peewee import *
+from playhouse.shortcuts import model_to_dict
 
-from pony.orm import *
 from tools.auth import check_authorization
-from tools.db import db
-
-class RoleDAO(db.Entity):
-    _table_ = "role"
-    id = PrimaryKey(int, auto=True)
-    lib = Required(str)
-    user = Set("UserDAO")
-
-from .user import RoleDAO
-
-
+from tools.db import db_wrapper
 
 api = Namespace('role', description='Role')
 
 
+class Role(db_wrapper.Model):
+    _table_ = "role"
+    id = AutoField()
+    lib = CharField()
 
 roleModel = api.model('Role',{
     'id': fields.Integer(
@@ -41,52 +36,48 @@ roleModel = api.model('Role',{
 
 @check_authorization
 @api.route("/")
-class roleList(Resource):
+class RoleListAPI(Resource):
     """Shows a list of all roles"""
     @api.doc("role_user")
-    @db_session
     @api.marshal_list_with(roleModel)
     def get(self):
         """List all roles"""
-        roles = select(p for p in RoleDAO)[:]
-        result = {'data': [p.to_dict() for p in roles]}
-        return result['data']
+        roles = Role.select()
+        return [model_to_dict(r) for r in roles]
 
     
     @api.doc("delete_role")
     @api.response(204, "role deleted")
     def delete(self):
         """Delete all role"""
-        RoleDAO.select().delete(bulk=True)
-        commit()
+        Role.delete().execute()
         return "", 204
 
     @api.doc("create_role")
     @api.expect(roleModel, validate=True)
     @api.marshal_with(roleModel, code=201)
-    @db_session
     def post(self):
         """Create a new role"""
-        payload = api.payload
-        role = RoleDAO(**payload)
-        commit()
-        return role, 201
+        payload = {x: api.payload[x] for x in api.payload if x in roleModel}
+        role = Role(**payload)
+        role.save()
+        return model_to_dict(role), 201
 
 
 @check_authorization
 @api.route("/<string:id>")
 @api.response(404, "role not found")
 @api.param("id", "The role  identifier")
-class Role(Resource):
+class RoleAPI(Resource):
     """Show a single role item and lets you delete them"""
     @api.doc("get_role")
     @api.marshal_with(roleModel)
     def get(self, id):
         """Fetch a given role"""
         try:
-            user = RoleDAO[id]
-            return user
-        except pony.orm.core.ObjectNotFound:
+            role = Role[id]
+            return model_to_dict(role)
+        except Role.DoesNotExist:
             api.abort(404, f"Role with id {id} doesn't exist")
 
     @api.doc("delete_role")
@@ -94,8 +85,8 @@ class Role(Resource):
     def delete(self, id):
         """Delete a role given its identifier"""
         try:
-            RoleDAO[id].delete()
-        except pony.orm.core.ObjectNotFound:
+            Role[id].delete_instance()
+        except Role.DoesNotExist:
             api.abort(404, f"Role {id} doesn't exist")
         return "", 204
 
@@ -104,12 +95,17 @@ class Role(Resource):
     @api.marshal_with(roleModel)
     def put(self, id):
         """Update a given role"""
-        payload = api.payload
+        payload = {x: api.payload[x] for x in api.payload if x in roleModel}
         if 'id' in payload:
             payload.pop('id')
         try:
-            RoleDAO[id].set(**payload)
-        except pony.orm.core.ObjectNotFound:
+            if len(payload) == 0:
+                return model_to_dict(Role[id])
+            Role.update(**payload).where(Role.id == id).execute()
+            return Role[id]
+        except Role.DoesNotExist:
             api.abort(404, f"Role with id {id} doesn't exist")
-        commit()
-        return RoleDAO[id]
+
+def create_tables():
+    "Create tables for this file"
+    db_wrapper.database.create_tables([Role])

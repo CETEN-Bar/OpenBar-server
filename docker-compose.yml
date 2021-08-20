@@ -46,6 +46,6 @@ services:
       - "5000:5000"
     environment:
       - FLASK_ENV
-      - DB_PASSWORD=${DB_SERVICE_USER_PW}
+      - DATABASE=postgresql://service_user:${DB_SERVICE_USER_PW}@database:5432/user
     volumes:
       - "./user/user:/opt/app"

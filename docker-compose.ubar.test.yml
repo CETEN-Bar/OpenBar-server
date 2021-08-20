@@ -18,5 +18,5 @@ services:
     links:
       - postgresql
     environment:
-      - SQLALCHEMY_DATABASE_URI=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgresql:5436/bar-test
+      - DATABASE=postgresql://service_user:${DB_SERVICE_USER_PW}@database:5432/test
       - FLASK_ENV
