@@ -25,8 +25,7 @@ class Salt(db_wrapper.Model):
 
 
 saltModel = api.model('Salt',{
-    'id': fields.Integer(
-        attribute='id',
+    'year': fields.Integer(
         required=True,
         description='Salt year attribution'),
     'salt': fields.String(
@@ -54,7 +53,8 @@ class SaltListAPI(Resource):
         payload = {x: api.payload[x] for x in api.payload if x in saltModel}
         payload['salt'] = payload['salt'][1:].replace('\'','')
         salt = Salt(**payload)
-        salt.save()
+        print(salt.year,file=sys.stderr)
+        salt.save(force_insert=True)
         return model_to_dict(salt), 201
 
 @check_authorization

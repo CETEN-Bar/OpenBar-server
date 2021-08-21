@@ -20,21 +20,21 @@ services:
       retries: 10
       start_period: 1s
 
-  example:
-    build: ./example
-    links:
-      - database
-    depends_on:
-      database:
-        condition: service_healthy
-    ports:
-      - "6200:6200"
-    environment:
-      - FLASK_ENV
-      - DATABASE=postgresql://service_example:${DB_SERVICE_EXAMPLE_PW}@database:5432/example
-    volumes:
-      - "./example/example:/opt/app"
-
+  # example:
+  #   build: ./example
+  #   links:
+  #     - database
+  #   depends_on:
+  #     database:
+  #       condition: service_healthy
+  #   ports:
+  #     - "6200:6200"
+  #   environment:
+  #     - FLASK_ENV
+  #     - DATABASE=postgresql://service_example:${DB_SERVICE_EXAMPLE_PW}@database:5432/example
+  #   volumes:
+  #     - "./example/example:/opt/app"
+    
   user:
     build: ./user
     links:

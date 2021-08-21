@@ -11,24 +11,28 @@ import bcrypt
 import requests
 from dateutil import parser
 from datetime import date
+import argon2
 
 from flask_restx import Resource, fields
 from peewee import *
 from playhouse.shortcuts import model_to_dict
+from flask_login import UserMixin, login_required, login_user, logout_user 
+from tools.LoginManager import login_manager
 
 from tools.auth import check_authorization
 from tools.db import db_wrapper
+
 from apis.user.role import Role
 from apis.user.salt import Salt
-
 
 from apis.user import api
 
 local_history = []
 
 
-class User(db_wrapper.Model):
+class User(UserMixin,db_wrapper.Model):
     """user object"""
+    _table_= "user_table"
     id = AutoField()
     id_card = CharField(unique=True)
     name = CharField()
@@ -62,11 +66,11 @@ userModel = api.model('User', {
         required=True,
         example=1,
         description='User\'s role identifier',
-        attribute= lambda x: x if type(x) != dict else x['role']['id']),
+        attribute= lambda x: x['role'] if type(x['role']) is int else x['role']['id']),
     'salt_year': fields.Integer(
         required=True,
         description='Salt year',
-        attribute= lambda x: x if type(x) != dict else x['salt']['year']),
+        attribute= lambda x: x['salt'] if type(x['salt']) is int else x['salt']['year'] ),
     'group_year': fields.Integer(
         required=False,
         example=2023,
@@ -92,7 +96,7 @@ class UserListAPI(Resource):
         users = User.select()
         return [model_to_dict(u) for u in users]
 
-
+    @login_required
     @api.doc("create_user")
     @api.expect(userModel, validate=False)
     @api.marshal_with(userModel, code=201)
@@ -106,36 +110,59 @@ class UserListAPI(Resource):
         except Salt.DoesNotExist:
             myobj = {"year": date.today().year, "salt": str(bcrypt.gensalt())[1:].replace('\'','')}
             payload['salt'] = Salt(**myobj)
-            payload['salt'].save()
-        payload['id_card'] =  str(bcrypt.hashpw(str.encode(payload['id_card']),bytes(payload['salt'].salt.replace('"', '\''),encoding='utf8')))
-        userobj = User(**payload)
-        userobj.save()
-        user = model_to_dict(userobj)
-        user['role'] = userobj.role.id
-        return user, 201
+            print(payload['salt'].save(force_insert=True),file=sys.stderr)
+        if not user_exsist(payload['id_card']):
+            payload['id_card'] =  str(argon2.low_level.hash_secret(str.encode(payload['id_card']),bytes(payload['salt'].salt.replace('"', '\''),encoding='utf8'),time_cost=1, memory_cost=8, parallelism=1, hash_len=64, type=argon2.low_level.Type.ID))[1:].replace('\'','')
+            if payload['password'] != "":
+                payload['password'] = str(argon2.low_level.hash_secret(str.encode(payload['password']),bcrypt.gensalt(),time_cost=1, memory_cost=8, parallelism=1, hash_len=64, type=argon2.low_level.Type.ID))[1:].replace('\'','')
+            else:
+                payload['password'] = None
+            userobj = User(**payload)
+            userobj.save()
+            user = model_to_dict(userobj)
+            user['role'] = userobj.role.id
+            return user, 201
+        api.abort(404, f"User with id card {payload['id_card']} already exist")
 
 @check_authorization
-@api.route("/<string:id_card>")
+@api.route("/card/<string:id_card>")
 @api.response(404, "user not found")
 @api.param("id_card", "The user card identifier")
-class UserAPI(Resource):
-    """Show a single user item and lets you delete them"""
-    @api.doc("get_user")
+class UserAPICard(Resource):
+    """Show a single user item"""
+    @login_required
+    @api.doc("get_user_with_card")
     @api.marshal_with(userModel)
     def get(self, id_card):
         """Fetch a given user"""
-        slist = Salt.select().order_by(Salt.id.desc())
+        slist = Salt.select().order_by(Salt.year.desc())
+
         for s in slist:
             salt = bytes(s.salt.replace('"', '\''), encoding='utf8')
-            users = User.select(User.salt.year == s.year and User.id_card == str(bcrypt.hashpw(str.encode(id_card), salt)))
-            if users.count() > 0:
-                user = users[0]
+            users = User.select().where(User.salt == s.year, User.id_card == str(argon2.low_level.hash_secret(str.encode(id_card),salt,time_cost=1, memory_cost=8, parallelism=1, hash_len=64, type=argon2.low_level.Type.ID))[1:].replace('\'',''))
+            for user in users:
                 local_history.insert(0, user.name + " " + user.fname)
                 return model_to_dict(user)
+          
         local_history.insert(0, "*******")
         api.abort(404, f"User with id card {id_card} doesn't exist")
 
-
+@check_authorization
+@api.route("/<string:id>")
+@api.response(404, "user not found")
+@api.param("id", "The user  identifier")
+class UserAPI(Resource):
+    @login_required
+    @api.doc("get_user")
+    @api.marshal_with(userModel)
+    def get(self, id):
+        """Get a user given its identifier"""
+        try:
+            user = User.get(User.id==id)
+        except User.DoesNotExist:
+            api.abort(404, f"User with id {id} doesn't exist")
+        return model_to_dict(user)
+    @login_required
     @api.doc("delete_user")
     @api.response(204, "User deleted")
     def delete(self, id):
@@ -143,9 +170,9 @@ class UserAPI(Resource):
         try:
             User[id].delete_instance()
         except User.DoesNotExist:
-            api.abort(404, f"User with id card {id_card} doesn't exist")
+            api.abort(404, f"User with id {id} doesn't exist")
         return "", 204
-
+    @login_required
     @api.expect(userModel)
     @api.marshal_with(userModel)
     def put(self, id):
@@ -155,11 +182,13 @@ class UserAPI(Resource):
             payload.pop('id')
         if 'id_card' in payload:
             payload.pop('id_card')
+        if 'salt_year' in payload:
+            payload.pop('salt_year')
         try:
            User.update(**payload).where(User.id == id).execute()
         except User.DoesNotExist:
             api.abort(404, f"User {id} doesn't exist")
-        return user
+        return model_to_dict(User[id])
 
 
 @check_authorization
@@ -170,3 +199,65 @@ class History(Resource):
     def get(self):
         """Fetch the history"""
         return local_history
+
+@check_authorization
+@api.route("/connect/<string:id_card>")
+@api.response(404, "user not found")
+@api.param("id_card", "The user's card identifier")
+class ConnectAPI(Resource):
+    @api.doc("connect_user")
+    def put(self, id_card):
+        """Connect a user given its identifier"""
+        u = user_exsist(id_card)
+        if u != False:
+            login_user(u)
+            return True
+        api.abort(404, f"User with id {id_card} doesn't exist")
+
+
+
+@check_authorization
+@api.route("/connectpw/<string:id_card>&<string:pw>")
+@api.response(404, "user not found")
+@api.param("id_card", "The user's card identifier")
+class ConnectPWAPI(Resource):
+    @api.doc("connect_user_pw")
+    def put(self, id_card, pw):
+        """Connect a user given its identifier and password"""
+        u = user_exsist(id_card)
+        if u == False:
+            api.abort(404, f"User with id {id_card} doesn't exist")
+        if u.password is None:
+            api.abort(404, f"User with id {id_card} can't log in with password")
+        try:
+            if argon2.low_level.verify_secret(str.encode(u.password),str.encode(pw),argon2.low_level.Type.ID):
+                login_user(u)
+                return True
+        except argon2.exceptions.VerificationError:
+            api.abort(404, f"Wrong password")
+        
+
+
+@check_authorization
+@api.route("/logout")
+class LogoutAPI(Resource):
+    @api.doc("logout_user")
+    @login_required
+    def put(self):
+        """Logout a user"""
+        logout_user()
+        return True
+
+def user_exsist(id_card):
+    "Check if an user already exist"
+    slist = Salt.select().order_by(Salt.year.desc())
+    for s in slist:
+        salt = bytes(s.salt.replace('"', '\''), encoding='utf8')
+        users = User.select().where(User.salt == s.year, User.id_card == str(argon2.low_level.hash_secret(str.encode(id_card),salt,time_cost=1, memory_cost=8, parallelism=1, hash_len=64, type=argon2.low_level.Type.ID))[1:].replace('\'',''))
+        for u in users:
+            return u
+    return False
+
+@login_manager.user_loader
+def load_user(userid):
+    return User(userid)
