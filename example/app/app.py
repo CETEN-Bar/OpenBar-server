@@ -9,15 +9,12 @@ import os
 from flask import Flask, g
 from tools.db import db_wrapper
 
-from werkzeug.middleware.proxy_fix import ProxyFix
-
 from apis import apis
 from apis import create_tables as create_tables_apis
 
 def create_app():
     """Return the flask app for the example microservice"""
     app = Flask(__name__)
-    app.wsgi_app = ProxyFix(app.wsgi_app)
 
     app.config['RESTPLUS_VALIDATE'] = True
     

@@ -33,7 +33,7 @@ services:
       - FLASK_ENV
       - DATABASE=postgresql://service_example:${DB_SERVICE_EXAMPLE_PW}@database:5432/example
     volumes:
-      - "./example/example:/opt/app"
+      - "./example/app:/opt/app"
     
   user:
     build: ./user
@@ -48,7 +48,7 @@ services:
       - FLASK_ENV
       - DATABASE=postgresql://service_user:${DB_SERVICE_USER_PW}@database:5432/user
     volumes:
-      - "./user/user:/opt/app"
+      - "./user/app:/opt/app"
 
   nginx:
     image: nginx:latest
@@ -66,5 +66,5 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - "URLS=[ { url: 'http://${URL}/api/v0/roots/user/swagger.json', name: 'User' }, { url: 'http://${URL}/api/v0/roots/example/swagger.json', name: 'Example' } ]"
+      - "URLS=[ { url: '/api/v0/roots/user/swagger.json', name: 'User' }, { url: '/api/v0/roots/example/swagger.json', name: 'Example' } ]"
       - BASE_URL=/api/v0
