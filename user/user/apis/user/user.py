@@ -12,18 +12,20 @@ import requests
 from dateutil import parser
 from datetime import date
 
-from flask_restx import Namespace, Resource, fields
+from flask_restx import Resource, fields
 from peewee import *
 from playhouse.shortcuts import model_to_dict
 
 from tools.auth import check_authorization
 from tools.db import db_wrapper
-from apis.role import Role
-from apis.salt import Salt
+from apis.user.role import Role
+from apis.user.salt import Salt
+
+
+from apis.user import api
 
 local_history = []
 
-api = Namespace('user', description='User')
 
 class User(db_wrapper.Model):
     """user object"""
@@ -168,7 +170,3 @@ class History(Resource):
     def get(self):
         """Fetch the history"""
         return local_history
-
-def create_tables():
-    "Create tables for this file"
-    db_wrapper.database.create_tables([Salt, User])

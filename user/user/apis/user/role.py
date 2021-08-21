@@ -6,7 +6,7 @@ Inspired by
 https://github.com/python-restx/flask-restx/blob/master/examples/todomvc.py
 """
 
-from flask_restx import Namespace, Resource, fields
+from flask_restx import Resource, fields
 
 from peewee import *
 from playhouse.shortcuts import model_to_dict
@@ -14,8 +14,7 @@ from playhouse.shortcuts import model_to_dict
 from tools.auth import check_authorization
 from tools.db import db_wrapper
 
-api = Namespace('role', description='Role')
-
+from apis.user import api
 
 class Role(db_wrapper.Model):
     _table_ = "role"
@@ -33,7 +32,7 @@ roleModel = api.model('Role',{
 })
 
 @check_authorization
-@api.route("/")
+@api.route("/role/")
 class RoleListAPI(Resource):
     """Shows a list of all roles"""
     @api.doc("role_user")
@@ -63,7 +62,7 @@ class RoleListAPI(Resource):
 
 
 @check_authorization
-@api.route("/<string:id>")
+@api.route("/role/<string:id>")
 @api.response(404, "role not found")
 @api.param("id", "The role  identifier")
 class RoleAPI(Resource):
@@ -103,7 +102,3 @@ class RoleAPI(Resource):
             return Role[id]
         except Role.DoesNotExist:
             api.abort(404, f"Role with id {id} doesn't exist")
-
-def create_tables():
-    "Create tables for this file"
-    db_wrapper.database.create_tables([Role])
