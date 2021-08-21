@@ -8,21 +8,18 @@ https://github.com/python-restx/flask-restx/blob/master/examples/todomvc.py
 
 import sys
 
-from flask_restx import Resource, fields
+from flask_restx import Namespace, Resource, fields
 from peewee import *
 from playhouse.shortcuts import model_to_dict
 
 from tools.auth import check_authorization
 from tools.db import db_wrapper
 
-
-from apis.user import api
-
-
 class Salt(db_wrapper.Model):
     year = IntegerField(primary_key=True)
     salt = CharField()
 
+api = Namespace('salt', description='salt')
 
 saltModel = api.model('Salt',{
     'year': fields.Integer(
@@ -35,7 +32,7 @@ saltModel = api.model('Salt',{
 })
 
 @check_authorization
-@api.route("/salt/")
+@api.route("/")
 class SaltListAPI(Resource):
     """Shows a list of all salt"""
     @api.doc("get_salt")
@@ -58,7 +55,7 @@ class SaltListAPI(Resource):
         return model_to_dict(salt), 201
 
 @check_authorization
-@api.route("/salt/<string:year>")
+@api.route("/<string:year>")
 @api.response(404, "salt not found")
 @api.param("year", "The year of the salt")
 class SaltAPI(Resource):
