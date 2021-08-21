@@ -13,7 +13,7 @@ from apis.db import api as nsdb
 
 from apis.db import create_tables as create_tables_db
 
-apis = Blueprint("apis", __name__, url_prefix="/api/v0")
+apis = Blueprint("apis", __name__, url_prefix="/api/v0/example")
 api = Api(apis,
     title='Example API',
     version='1.0',
