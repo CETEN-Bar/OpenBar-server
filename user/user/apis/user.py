@@ -16,9 +16,10 @@ import argon2
 from flask_restx import Namespace, Resource, fields
 from peewee import *
 from playhouse.shortcuts import model_to_dict
-
+from flask_login import UserMixin, login_required, login_user, logout_user 
 from tools.auth import check_authorization
 from tools.db import db_wrapper
+from tools.LoginManager import login_manager
 from apis.role import Role
 from apis.salt import Salt
 
@@ -26,7 +27,7 @@ local_history = []
 
 api = Namespace('user', description='User')
 
-class User(db_wrapper.Model):
+class User(UserMixin,db_wrapper.Model):
     """user object"""
     _table_= "user_table"
     id = AutoField()
@@ -92,7 +93,7 @@ class UserListAPI(Resource):
         users = User.select()
         return [model_to_dict(u) for u in users]
 
-
+    @login_required
     @api.doc("create_user")
     @api.expect(userModel, validate=False)
     @api.marshal_with(userModel, code=201)
@@ -109,6 +110,10 @@ class UserListAPI(Resource):
             print(payload['salt'].save(force_insert=True),file=sys.stderr)
         if not user_exsist(payload['id_card']):
             payload['id_card'] =  str(argon2.low_level.hash_secret(str.encode(payload['id_card']),bytes(payload['salt'].salt.replace('"', '\''),encoding='utf8'),time_cost=1, memory_cost=8, parallelism=1, hash_len=64, type=argon2.low_level.Type.ID))[1:].replace('\'','')
+            if payload['password'] != "":
+                payload['password'] = str(argon2.low_level.hash_secret(str.encode(payload['password']),bcrypt.gensalt(),time_cost=1, memory_cost=8, parallelism=1, hash_len=64, type=argon2.low_level.Type.ID))[1:].replace('\'','')
+            else:
+                payload['password'] = None
             userobj = User(**payload)
             userobj.save()
             user = model_to_dict(userobj)
@@ -121,7 +126,8 @@ class UserListAPI(Resource):
 @api.response(404, "user not found")
 @api.param("id_card", "The user card identifier")
 class UserAPICard(Resource):
-    """Show a single user item and lets you delete them"""
+    """Show a single user item"""
+    @login_required
     @api.doc("get_user_with_card")
     @api.marshal_with(userModel)
     def get(self, id_card):
@@ -143,6 +149,7 @@ class UserAPICard(Resource):
 @api.response(404, "user not found")
 @api.param("id", "The user  identifier")
 class UserAPI(Resource):
+    @login_required
     @api.doc("get_user")
     @api.marshal_with(userModel)
     def get(self, id):
@@ -152,7 +159,7 @@ class UserAPI(Resource):
         except User.DoesNotExist:
             api.abort(404, f"User with id {id} doesn't exist")
         return model_to_dict(user)
-
+    @login_required
     @api.doc("delete_user")
     @api.response(204, "User deleted")
     def delete(self, id):
@@ -162,7 +169,7 @@ class UserAPI(Resource):
         except User.DoesNotExist:
             api.abort(404, f"User with id {id} doesn't exist")
         return "", 204
-
+    @login_required
     @api.expect(userModel)
     @api.marshal_with(userModel)
     def put(self, id):
@@ -190,6 +197,58 @@ class History(Resource):
         """Fetch the history"""
         return local_history
 
+
+@check_authorization
+@api.route("/connect/<string:id_card>")
+@api.response(404, "user not found")
+@api.param("id_card", "The user's card identifier")
+class ConnectAPI(Resource):
+    @api.doc("connect_user")
+    def put(self, id_card):
+        """Connect a user given its identifier"""
+        u = user_exsist(id_card)
+        if u != False:
+            login_user(u)
+            return True
+        api.abort(404, f"User with id {id_card} doesn't exist")
+
+
+
+@check_authorization
+@api.route("/connectpw/<string:id_card>&<string:pw>")
+@api.response(404, "user not found")
+@api.param("id_card", "The user's card identifier")
+class ConnectPWAPI(Resource):
+    @api.doc("connect_user_pw")
+    def put(self, id_card, pw):
+        """Connect a user given its identifier and password"""
+        u = user_exsist(id_card)
+        if u == False:
+            api.abort(404, f"User with id {id_card} doesn't exist")
+        if u.password is None:
+            api.abort(404, f"User with id {id_card} can't log in with password")
+        try:
+            if argon2.low_level.verify_secret(str.encode(u.password),str.encode(pw),argon2.low_level.Type.ID):
+                login_user(u)
+                return True
+        except argon2.exceptions.VerificationError:
+            api.abort(404, f"Wrong password")
+        
+
+
+
+
+@check_authorization
+@api.route("/logout")
+class LogoutAPI(Resource):
+    @api.doc("logout_user")
+    @login_required
+    def put(self):
+        """Logout a user"""
+        logout_user()
+        return True
+
+
 def create_tables():
     "Create tables for this file"
     db_wrapper.database.create_tables([Salt, User])
@@ -201,5 +260,9 @@ def user_exsist(id_card):
         salt = bytes(s.salt.replace('"', '\''), encoding='utf8')
         users = User.select().where(User.salt == s.year, User.id_card == str(argon2.low_level.hash_secret(str.encode(id_card),salt,time_cost=1, memory_cost=8, parallelism=1, hash_len=64, type=argon2.low_level.Type.ID))[1:].replace('\'',''))
         for u in users:
-            return True
+            return u
     return False
+
+@login_manager.user_loader
+def load_user(userid):
+    return User(userid)
