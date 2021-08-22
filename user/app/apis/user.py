@@ -9,14 +9,13 @@ https://github.com/python-restx/flask-restx/blob/master/examples/todomvc.py
 import sys
 import bcrypt
 import requests
-from dateutil import parser
 from datetime import date
 import argon2
 
 from flask_restx import Namespace, Resource, fields
 from peewee import *
 from playhouse.shortcuts import model_to_dict
-from flask_login import UserMixin, login_required, login_user, logout_user 
+from flask_login import UserMixin, login_required, login_user, logout_user ,current_user
 from tools.LoginManager import login_manager
 
 from tools.auth import check_authorization
@@ -95,7 +94,6 @@ class UserListAPI(Resource):
         users = User.select()
         return [model_to_dict(u) for u in users]
 
-    @login_required
     @api.doc("create_user")
     @api.expect(userModel, validate=False)
     @api.marshal_with(userModel, code=201)
@@ -211,6 +209,7 @@ class ConnectAPI(Resource):
         if u != False:
             login_user(u)
             return True
+
         api.abort(404, f"User with id {id_card} doesn't exist")
 
 
@@ -259,7 +258,7 @@ def user_exsist(id_card):
 
 @login_manager.user_loader
 def load_user(userid):
-    return User(userid)
+    return User[userid]
 
 
 def create_tables():
