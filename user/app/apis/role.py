@@ -57,6 +57,8 @@ class RoleListAPI(Resource):
     def post(self):
         """Create a new role"""
         payload = {x: api.payload[x] for x in api.payload if x in roleModel}
+        if 'id' in payload:
+            payload.pop('id')
         role = Role(**payload)
         role.save()
         return model_to_dict(role), 201

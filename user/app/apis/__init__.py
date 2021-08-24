@@ -23,9 +23,9 @@ api = Api(apis,
     description='An API providing functions for User managment',
 )
 api.add_namespace(nsuser, path='/user')
-api.add_namespace(nsrole, path='/role')
-api.add_namespace(nr, path='/recharge')
-api.add_namespace(nsalt, path='/salt')
+api.add_namespace(nsrole, path='/user/role')
+api.add_namespace(nr, path='/user/recharge')
+api.add_namespace(nsalt, path='/user//salt')
 
 def create_tables():
     "Create tables for this module"
