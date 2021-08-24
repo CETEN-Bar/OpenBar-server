@@ -1,0 +1,77 @@
+version: '3'
+services:
+  database:
+    build: ./database
+    environment:
+      - POSTGRES_DB
+      - POSTGRES_USER
+      - POSTGRES_PASSWORD
+      - DB_SERVICE_USER_PW
+      - DB_SERVICE_EXAMPLE_PW
+    ports:
+      - "5433:5433"
+    volumes:
+      - ./postgres-data/postgres:/var/lib/postgresql/data
+    restart: always
+    healthcheck:
+      test: ["CMD", "test" ,"-f", "/var/lib/postgresql/data/ready.flag"]
+      interval: 1s
+      timeout: 1s
+      retries: 10
+      start_period: 1s
+
+  example:
+    build: ./example
+    links:
+      - database
+    depends_on:
+      database:
+        condition: service_healthy
+    ports:
+      - "6200:6200"
+    environment:
+      - FLASK_ENV
+      - DATABASE=postgresql://service_example:${DB_SERVICE_EXAMPLE_PW}@database:5432/example
+    volumes:
+      - "./example/app:/opt/app"
+    
+  user:
+    build: ./user
+    links:
+      - database
+    depends_on:
+      database:
+        condition: service_healthy
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_ENV
+      - DATABASE=postgresql://service_user:${DB_SERVICE_USER_PW}@database:5432/user
+    volumes:
+      - "./user/app:/opt/app"
+
+  nginx:
+    image: nginx:latest
+    links:
+      - user
+      - example
+      - swagger-ui
+    volumes:
+      - "./nginx/default.conf:/etc/nginx/conf.d/default.conf"
+    ports:
+      - "80:80"
+    restart: always
+  swagger-ui:
+    image: swaggerapi/swagger-ui
+    ports:
+      - "8080:8080"
+    environment:
+      - "URLS=[ { url: '/api/v0/roots/user/swagger.json', name: 'User' }, { url: '/api/v0/roots/example/swagger.json', name: 'Example' } ]"
+      - BASE_URL=/api/v0
+
+  sut:
+    build: ./tests
+    links:
+      - nginx
+    depends_on:
+      - nginx

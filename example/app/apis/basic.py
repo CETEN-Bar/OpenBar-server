@@ -7,50 +7,85 @@ Inspired by
 https://github.com/python-restx/flask-restx/blob/master/examples/todomvc.py
 """
 
+import os
+import json
+
 from flask_restx import Namespace, Resource, fields
+from filelock import FileLock
 
 from tools.auth import check_authorization
 
 api = Namespace('basic', description='Example API')
 
-class TasksDAO():
+FLNAME = "/tmp/basic.json"
+
+def _get():
+    "Return the content of FLNAME. Be carefull to have the file locked"
+    if not os.path.isfile(FLNAME):
+        _write([], 0)
+        return [], 0
+    with open(FLNAME, "r") as fl:
+        return json.load(fl)
+
+def _write(tasks, counter):
+    "Write to FLNAME. Be carefull to have the file locked"
+    with open(FLNAME, "w") as fl:
+        json.dump((tasks, counter), fl)
+
+class Tasks():
     """Object Database of a task"""
     def __init__(self):
         """Initialize an empty task list"""
-        self.counter = 0
-        self.tasks = []
+        self.lock = FileLock(FLNAME + ".lock")
+
+    def getAll(self):
+        with self.lock:
+            tasks, _ = _get()
+            return tasks
 
     def get(self, id):
         """Return the task given its id"""
-        for task in self.tasks:
-            if task["id"] == id:
-                return task
+        with self.lock:
+            tasks, _ = _get()
+            for task in tasks:
+                if task["id"] == id:
+                    return task
         return api.abort(404, f"Task {id} doesn't exist")
 
     def create(self, data):
         """Create a task"""
-        task = data
-        task["id"] = self.counter
-        self.counter += 1
-        self.tasks.append(task)
-        return task
+        with self.lock:
+            tasks, counter = _get()
+            data["id"] = counter
+            tasks.append(data)
+            _write(tasks, counter + 1)
+            return data
 
     def update(self, id, data):
-        """Create a task"""
-        task = self.get(id)
-        task.update(data)
-        return task
+        """Update a task"""
+        with self.lock:
+            tasks, counter = _get()
+            for i in range(len(tasks)):
+                if tasks[i]["id"] == id:
+                    tasks[i].update(data)
+                    _write(tasks, counter)
+                    return tasks[i]
+        return api.abort(404, f"Task {id} doesn't exist")
 
     def delete(self, id):
         """Delete the task given its id"""
-        task = self.get(id)
-        self.tasks.remove(task)
+        with self.lock:
+            tasks, counter = _get()
+            task = self.get(id)
+            tasks.remove(task)
+            _write(tasks, counter)
 
     def deleteAll(self):
         """Delete the task given its id"""
-        self.tasks = []
+        with self.lock:
+            _write([], 0)
 
-taskDAO = TasksDAO()
+taskDAO = Tasks()
 
 taskModel = api.model('task', {
     'id': fields.Integer(
@@ -75,13 +110,13 @@ taskModel = api.model('task', {
 
 @check_authorization
 @api.route("/")
-class TaskList(Resource):
+class TaskListAPI(Resource):
     """Shows a list of all tasks, and lets you POST to add new tasks"""
     @api.doc("list_tasks")
     @api.marshal_list_with(taskModel)
     def get(self):
         """List all tasks"""
-        return taskDAO.tasks
+        return taskDAO.getAll()
 
     @api.doc("delete_tasks")
     @api.response(204, "tasks deleted")
@@ -102,7 +137,7 @@ class TaskList(Resource):
 @api.route("/<int:id>")
 @api.response(404, "task not found")
 @api.param("id", "The task identifier")
-class Task(Resource):
+class TaskAPI(Resource):
     """Show a single task item and lets you delete them"""
     @api.doc("get_task")
     @api.marshal_with(taskModel)
