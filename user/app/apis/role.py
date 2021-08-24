@@ -18,7 +18,7 @@ api = Namespace('role', description='Role')
 
 
 class Role(db_wrapper.Model):
-    _table_ = "role"
+    "DAO of a user role"
     id = AutoField()
     lib = CharField()
 
@@ -43,7 +43,6 @@ class RoleListAPI(Resource):
         roles = Role.select()
         return [model_to_dict(r) for r in roles]
 
-    
     @api.doc("delete_role")
     @api.response(204, "role deleted")
     def delete(self):
