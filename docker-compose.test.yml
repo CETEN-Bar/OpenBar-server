@@ -17,7 +17,7 @@ services:
       test: ["CMD", "test" ,"-f", "/var/lib/postgresql/data/ready.flag"]
       interval: 1s
       timeout: 1s
-      retries: 10
+      retries: 30
       start_period: 1s
 
   example:
