@@ -68,3 +68,4 @@ services:
     environment:
       - "URLS=[ { url: '/api/v0/roots/user/swagger.json', name: 'User' }, { url: '/api/v0/roots/example/swagger.json', name: 'Example' } ]"
       - BASE_URL=/api/v0
+      - DEFAULT_MODELS_EXPAND_DEPTH=-1

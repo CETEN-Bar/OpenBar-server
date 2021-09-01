@@ -7,7 +7,7 @@ Set of function to check authorization before accessing the API.
 
 from functools import wraps
 
-def check_authorization(f):
+def is_manager(f):
     """Place holder to show how to wrap a function to check auth"""
     @wraps(f)
     def decorated_function(*args,**kwargs):

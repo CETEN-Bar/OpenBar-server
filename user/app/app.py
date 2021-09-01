@@ -8,6 +8,7 @@ import os
 from flask import Flask
 from flask_restx import Api
 from flask_cors import CORS
+from filelock import FileLock
 
 from werkzeug.middleware.proxy_fix import ProxyFix
 from tools.LoginManager import login_manager
@@ -16,6 +17,7 @@ from tools.db import db_wrapper
 from apis import apis
 from apis import create_tables as create_tables_apis
 
+db_lock = FileLock("/tmp/db.lock")
 
 def create_app():
     """Return the flask app for the example microservice"""
@@ -31,8 +33,9 @@ def create_app():
     db_wrapper.init_app(app)
     app.secret_key = "TestENPROD"
 
-    with db_wrapper.database.connection_context():
-        create_tables_apis()
+    with db_lock:
+        with db_wrapper.database.connection_context():
+            create_tables_apis()
 
     CORS(app)
     login_manager.init_app(app)

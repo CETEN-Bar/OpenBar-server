@@ -13,7 +13,7 @@ from peewee import *
 from playhouse.shortcuts import model_to_dict
 from datetime import date
 import logging
-from tools.auth import check_authorization
+
 from tools.db import db_wrapper
 from apis.user import User
 from apis.role import Role
@@ -56,7 +56,6 @@ rechargeModel = api.model('Recharge',{
 })
 
 
-@check_authorization
 @api.route("/")
 class RechargeAPI(Resource):
     """Show a list of every recharge and let you add more"""

@@ -6,20 +6,20 @@ Inspired by
 https://github.com/python-restx/flask-restx/blob/master/examples/todomvc.py
 """
 
-import sys
-import bcrypt
-import requests
+import sys, os
 from datetime import date
-import argon2
+import requests
+
 
 from flask_restx import Namespace, Resource, fields
 from peewee import *
 from playhouse.shortcuts import model_to_dict
-from flask_login import UserMixin, login_required, login_user, logout_user ,current_user
+from flask_login import UserMixin, login_required, login_user, logout_user, current_user
 from tools.LoginManager import login_manager
 
-from tools.auth import check_authorization
+from tools.auth import is_manager
 from tools.db import db_wrapper
+from tools.crypto import generate_salt, hashPassword, hashCardID, verifyPassword
 
 from apis.role import Role
 from apis.salt import Salt
@@ -32,43 +32,63 @@ class User(UserMixin,db_wrapper.Model):
     """user object"""
     _table_= "user_table"
     id = AutoField()
-    id_card = CharField(unique=True)
+    id_card = CharField()
     name = CharField()
     fname = CharField()
-    balance = IntegerField()
+    balance = IntegerField(default=0)
     role = ForeignKeyField(Role, backref="users")
     salt = ForeignKeyField(Salt, backref="users")
     group_year = IntegerField(null=True)
-    username = CharField(null=True)
+    username = CharField(null=True, unique=True)
     password = CharField(null=True)
 
 
-userModel = api.model('User', {
+username_login_model = api.model('Login with username', {
+    'username': fields.String(
+        required=True,
+        description='Username'),
+    'password': fields.String(
+        required=True,
+        description='Password'),
+})
+
+card_login_model = api.model('Login with card ID', {
+    'id_card': fields.String(
+        required=True,
+        description='User card identifier'),
+    'password': fields.String(
+        required=True,
+        description='Password'),
+})
+
+card_id_model = api.model('Card ID',{
+    'id_card': fields.String(
+        required=True,
+        description='User card identifier'),
+})
+
+user_model_read = api.model('User Infos', {
     'id': fields.Integer(
         readonly=True,
         attribute='id',
         description='User identifier'),
-    'id_card': fields.String(
-        required=True,
-        description='User card identifier'),
     'name': fields.String(
         required=True,
-        description='User name'),
+        description='User name',
+        example="Sebastien"),
     'fname': fields.String(
         required=True,
-        description='User first name'),
+        description='User first name',
+        example="Da Silva"),
     'balance': fields.Integer(
-        required=True,
-        description='User balance, multiplied by 100'),
+        readonly=True,
+        description='User balance, multiplied by 100',
+        example=100),
     'role': fields.Integer(
         required=True,
         example=1,
         description='User\'s role identifier',
         attribute= lambda x: x['role'] if type(x['role']) is int else x['role']['id']),
-    'salt_year': fields.Integer(
-        required=True,
-        description='Salt year',
-        attribute= lambda x: x['salt'] if type(x['salt']) is int else x['salt']['year'] ),
     'group_year': fields.Integer(
         required=False,
         example=2023,
@@ -76,82 +96,88 @@ userModel = api.model('User', {
     ),
     'username': fields.String(
         required=False,
-        description='Username'),
-    'password': fields.String(
-        required=False,
-        description='Password'),
+        description='Username',
+        example="xXx_monSeigneur54_xXx"),
 })
 
+user_model = api.clone('User', user_model_read, {
+    'id_card': fields.String(
+        required=True,
+        description='User card identifier',
+        example="04ABDC1234"),
+    'password': fields.String(
+        required=False,
+        description='Password',
+        example="BouthierUWU"),
+})
 
-@check_authorization
 @api.route("/")
 class UserListAPI(Resource):
     """Shows a list of all user"""
+    @is_manager
     @api.doc("list_user")
-    @api.marshal_list_with(userModel)
+    @api.marshal_list_with(user_model_read)
     def get(self):
         """List all user"""
         users = User.select()
         return [model_to_dict(u) for u in users]
 
+    @is_manager
     @api.doc("create_user")
-    @api.expect(userModel, validate=False)
-    @api.marshal_with(userModel, code=201)
+    @api.expect(user_model, validate=True)
+    @api.marshal_with(user_model_read, code=201)
     def post(self):
         """Create a new user"""
-        payload = {x: api.payload[x] for x in api.payload if x in userModel}
+        payload = {x: api.payload[x] for x in api.payload if x in user_model}
         if 'id' in payload:
             payload.pop('id')
+
         try:
             payload['salt'] = Salt[date.today().year]
         except Salt.DoesNotExist:
-            myobj = {"year": date.today().year, "salt": str(bcrypt.gensalt())[1:].replace('\'','')}
-            payload['salt'] = Salt(**myobj)
-            print(payload['salt'].save(force_insert=True),file=sys.stderr)
-        if not user_exsist(payload['id_card']):
-            payload['id_card'] =  str(argon2.low_level.hash_secret(str.encode(payload['id_card']),bytes(payload['salt'].salt.replace('"', '\''),encoding='utf8'),time_cost=1, memory_cost=8, parallelism=1, hash_len=64, type=argon2.low_level.Type.ID))[1:].replace('\'','')
-            if payload['password'] != "":
-                payload['password'] = str(argon2.low_level.hash_secret(str.encode(payload['password']),bcrypt.gensalt(),time_cost=1, memory_cost=8, parallelism=1, hash_len=64, type=argon2.low_level.Type.ID))[1:].replace('\'','')
-            else:
-                payload['password'] = None
-            userobj = User(**payload)
-            userobj.save()
-            user = model_to_dict(userobj)
-            user['role'] = userobj.role.id
-            return user, 201
-        api.abort(404, f"User with id card {payload['id_card']} already exist")
+            payload['salt'] = Salt(year=date.today().year, salt=generate_salt())
+            payload['salt'].save(force_insert=True)
 
-@check_authorization
-@api.route("/card/<string:id_card>")
-@api.response(404, "user not found")
-@api.param("id_card", "The user card identifier")
-class UserAPICard(Resource):
+        if search_user(payload['id_card']):
+            api.abort(409, f"User with id card {payload['id_card']} already exist")
+
+        payload['id_card'] = hashCardID(payload['id_card'], payload['salt'].salt)
+        if payload['password'] != "":
+            payload['password'] = hashPassword(payload['password'], generate_salt())
+        else:
+            payload['password'] = None
+        userobj = User(**payload)
+        userobj.save()
+        user = model_to_dict(userobj)
+        user['role'] = userobj.role.id
+        return user, 201
+
+@api.route("/card/")
+@api.response(404, "User not found")
+class UserCardAPI(Resource):
     """Show a single user item"""
     @login_required
     @api.doc("get_user_with_card")
-    @api.marshal_with(userModel)
-    def get(self, id_card):
+    @api.expect(card_id_model)
+    @api.marshal_with(user_model_read)
+    def get(self):
         """Fetch a given user"""
-        slist = Salt.select().order_by(Salt.year.desc())
+        id_card = api.payload["id_card"]
 
-        for s in slist:
-            salt = bytes(s.salt.replace('"', '\''), encoding='utf8')
-            users = User.select().where(User.salt == s.year, User.id_card == str(argon2.low_level.hash_secret(str.encode(id_card),salt,time_cost=1, memory_cost=8, parallelism=1, hash_len=64, type=argon2.low_level.Type.ID))[1:].replace('\'',''))
-            for user in users:
-                local_history.insert(0, user.name + " " + user.fname)
-                return model_to_dict(user)
-          
-        local_history.insert(0, "*******")
-        api.abort(404, f"User with id card {id_card} doesn't exist")
+        u = search_user(id_card)
+        if u != False:
+            local_history.insert(0, "*******")
+            api.abort(404, f"User with id card {id_card} doesn't exist")
+        local_history.insert(0, user.name + " " + user.fname)
+        return model_to_dict(user)
 
-@check_authorization
 @api.route("/<string:id>")
 @api.response(404, "user not found")
 @api.param("id", "The user  identifier")
 class UserAPI(Resource):
     @login_required
     @api.doc("get_user")
-    @api.marshal_with(userModel)
+    @api.marshal_with(user_model_read)
     def get(self, id):
         """Get a user given its identifier"""
         try:
@@ -159,6 +185,7 @@ class UserAPI(Resource):
         except User.DoesNotExist:
             api.abort(404, f"User with id {id} doesn't exist")
         return model_to_dict(user)
+
     @login_required
     @api.doc("delete_user")
     @api.response(204, "User deleted")
@@ -169,18 +196,17 @@ class UserAPI(Resource):
         except User.DoesNotExist:
             api.abort(404, f"User with id {id} doesn't exist")
         return "", 204
+
     @login_required
-    @api.expect(userModel)
-    @api.marshal_with(userModel)
+    @api.expect(user_model)
+    @api.marshal_with(user_model_read)
     def put(self, id):
         """Update a user given its identifier"""
-        payload = {x: api.payload[x] for x in api.payload if x in userModel}
+        payload = {x: api.payload[x] for x in api.payload if x in user_model}
         if 'id' in payload:
             payload.pop('id')
         if 'id_card' in payload:
             payload.pop('id_card')
-        if 'salt_year' in payload:
-            payload.pop('salt_year')
         try:
            User.update(**payload).where(User.id == id).execute()
         except User.DoesNotExist:
@@ -188,7 +214,6 @@ class UserAPI(Resource):
         return model_to_dict(User[id])
 
 
-@check_authorization
 @api.route("/history")
 class History(Resource):
     """Show the history of the NFC card reader. This history will reset each time you restart the app"""
@@ -197,48 +222,50 @@ class History(Resource):
         """Fetch the history"""
         return local_history
 
-@check_authorization
-@api.route("/connect/<string:id_card>")
-@api.response(404, "user not found")
+@api.route("/connect/")
+@api.response(404, "User not found")
 @api.param("id_card", "The user's card identifier")
 class ConnectAPI(Resource):
     @api.doc("connect_user")
-    def put(self, id_card):
+    @api.expect(card_id_model)
+    def put(self):
         """Connect a user given its identifier"""
-        u = user_exsist(id_card)
+        id_card = api.payload['id_card']
+        u = search_user(id_card)
         if u != False:
             login_user(u)
             return True
 
-        api.abort(404, f"User with id {id_card} doesn't exist")
+        api.abort(404, f"User with this card id doesn't exist")
 
 
 
-@check_authorization
-@api.route("/connectpw/<string:id_card>&<string:pw>")
-@api.response(404, "user not found")
-@api.param("id_card", "The user's card identifier")
+@api.route("/connectpw/")
+@api.response(403, "Invalid credentials")
+@api.response(404, "User not found")
 class ConnectPWAPI(Resource):
-    @api.doc("connect_user_pw")
-    def put(self, id_card, pw):
+    @api.doc("connect_user_password")
+    @api.expect(card_login_model)
+    def put(self):
         """Connect a user given its identifier and password"""
-        u = user_exsist(id_card)
+        id_card = api.payload['id_card']
+        password = api.payload['password']
+        u = search_user(id_card)
         if u == False:
-            api.abort(404, f"User with id {id_card} doesn't exist")
+            api.abort(404, f"User with this card doesn't exist")
         if u.password is None:
-            api.abort(404, f"User with id {id_card} can't log in with password")
-        try:
-            if argon2.low_level.verify_secret(str.encode(u.password),str.encode(pw),argon2.low_level.Type.ID):
-                login_user(u)
-                return True
-        except argon2.exceptions.VerificationError:
-            api.abort(404, f"Wrong password")
-        
+            api.abort(403, f"User with this card can't log in with password")
+        if verifyPassword(u.password, password):
+            login_user(u)
+            return True
+        api.abort(403, "Invalid credentials")
+        return False
 
 
-@check_authorization
 @api.route("/logout")
 class LogoutAPI(Resource):
+    """Logout a user"""
+
     @api.doc("logout_user")
     @login_required
     def put(self):
@@ -246,20 +273,20 @@ class LogoutAPI(Resource):
         logout_user()
         return True
 
-def user_exsist(id_card):
-    "Check if an user already exist"
-    slist = Salt.select().order_by(Salt.year.desc())
-    for s in slist:
-        salt = bytes(s.salt.replace('"', '\''), encoding='utf8')
-        users = User.select().where(User.salt == s.year, User.id_card == str(argon2.low_level.hash_secret(str.encode(id_card),salt,time_cost=1, memory_cost=8, parallelism=1, hash_len=64, type=argon2.low_level.Type.ID))[1:].replace('\'',''))
-        for u in users:
-            return u
-    return False
-
 @login_manager.user_loader
 def load_user(userid):
+    "Get user by its id"
     return User[userid]
 
+def search_user(id_card):
+    "Return an user by its card id"
+    slist = Salt.select().order_by(Salt.year.desc())
+    for s in slist:
+        try:
+            return User.get(User.salt == s.year, User.id_card == hashCardID(id_card, s.salt))
+        except User.DoesNotExist:
+            pass
+    return False
 
 def create_tables():
     "Create tables for this file"

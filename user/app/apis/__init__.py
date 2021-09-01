@@ -9,7 +9,6 @@ from flask import Blueprint
 from flask_restx import Api
 from apis.role import api as nsrole
 from apis.user import api as nsuser
-from apis.salt import api as nsalt
 from apis.recharge import api as nr
 
 from apis.role import create_tables as create_tables_role
@@ -25,7 +24,6 @@ api = Api(apis,
 api.add_namespace(nsuser, path='/user')
 api.add_namespace(nsrole, path='/user/role')
 api.add_namespace(nr, path='/user/recharge')
-api.add_namespace(nsalt, path='/user//salt')
 
 def create_tables():
     "Create tables for this module"

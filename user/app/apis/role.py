@@ -11,7 +11,6 @@ from flask_restx import Namespace, Resource, fields
 from peewee import *
 from playhouse.shortcuts import model_to_dict
 
-from tools.auth import check_authorization
 from tools.db import db_wrapper
 
 api = Namespace('role', description='Role')
@@ -32,7 +31,6 @@ roleModel = api.model('Role',{
         description='Role description'),
 })
 
-@check_authorization
 @api.route("/")
 class RoleListAPI(Resource):
     """Shows a list of all roles"""
@@ -63,7 +61,6 @@ class RoleListAPI(Resource):
         return model_to_dict(role), 201
 
 
-@check_authorization
 @api.route("/<string:id>")
 @api.response(404, "role not found")
 @api.param("id", "The role  identifier")
