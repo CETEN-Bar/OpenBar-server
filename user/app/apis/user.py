@@ -17,7 +17,6 @@ from playhouse.shortcuts import model_to_dict
 from flask_login import UserMixin, login_required, login_user, logout_user, current_user
 from tools.LoginManager import login_manager
 
-from tools.auth import is_manager
 from tools.db import db_wrapper
 from tools.crypto import generate_salt, hashPassword, hashCardID, verifyPassword
 
@@ -28,9 +27,8 @@ local_history = []
 
 api = Namespace('user', description='User')
 
-class User(UserMixin,db_wrapper.Model):
+class UserT(UserMixin,db_wrapper.Model):
     """user object"""
-    _table_= "user_table"
     id = AutoField()
     id_card = CharField()
     name = CharField()
@@ -41,6 +39,12 @@ class User(UserMixin,db_wrapper.Model):
     group_year = IntegerField(null=True)
     username = CharField(null=True, unique=True)
     password = CharField(null=True)
+    phone = CharField(null=True)
+    mail = CharField(null=True)
+    stats_agree = BooleanField(default=False) 
+    last_login = DateTimeField()
+
+from tools.auth import is_manager
 
 
 username_login_model = api.model('Login with username', {
@@ -98,6 +102,21 @@ user_model_read = api.model('User Infos', {
         required=False,
         description='Username',
         example="xXx_monSeigneur54_xXx"),
+    'phone': fields.String(
+        required=False,
+        description='Phone number',
+        example="01 02 03 04 05"),
+    'mail': fields.String(
+        required=False,
+        description='Mail',
+        example="xxmonseigneurxx@telecomnancy.eu"),
+    'stats_agree': fields.Boolean(
+        required=True,
+        description='user agreement for us to use his data for stats',
+        example=False),
+    'last_login': fields.Date(
+        readonly=True,
+        description='Date of the last login'),
 })
 
 user_model = api.clone('User', user_model_read, {
@@ -114,15 +133,14 @@ user_model = api.clone('User', user_model_read, {
 @api.route("/")
 class UserListAPI(Resource):
     """Shows a list of all user"""
-    @is_manager
+    @is_manager(api)
     @api.doc("list_user")
     @api.marshal_list_with(user_model_read)
     def get(self):
         """List all user"""
-        users = User.select()
+        users = UserT.select()
         return [model_to_dict(u) for u in users]
 
-    @is_manager
     @api.doc("create_user")
     @api.expect(user_model, validate=True)
     @api.marshal_with(user_model_read, code=201)
@@ -146,8 +164,10 @@ class UserListAPI(Resource):
             payload['password'] = hashPassword(payload['password'], generate_salt())
         else:
             payload['password'] = None
-        userobj = User(**payload)
+        payload["last_login"] = str(date.today())
+        userobj = UserT(**payload)
         userobj.save()
+        payload["last_login"] = date.today()
         user = model_to_dict(userobj)
         user['role'] = userobj.role.id
         return user, 201
@@ -168,8 +188,8 @@ class UserCardAPI(Resource):
         if u != False:
             local_history.insert(0, "*******")
             api.abort(404, f"User with id card {id_card} doesn't exist")
-        local_history.insert(0, user.name + " " + user.fname)
-        return model_to_dict(user)
+        local_history.insert(0, u.name + " " + u.fname)
+        return model_to_dict(u)
 
 @api.route("/<string:id>")
 @api.response(404, "user not found")
@@ -181,8 +201,8 @@ class UserAPI(Resource):
     def get(self, id):
         """Get a user given its identifier"""
         try:
-            user = User.get(User.id==id)
-        except User.DoesNotExist:
+            user = UserT.get(UserT.id==id)
+        except UserT.DoesNotExist:
             api.abort(404, f"User with id {id} doesn't exist")
         return model_to_dict(user)
 
@@ -192,8 +212,8 @@ class UserAPI(Resource):
     def delete(self, id):
         """Delete a user given its identifier"""
         try:
-            User[id].delete_instance()
-        except User.DoesNotExist:
+            UserT[id].delete_instance()
+        except UserT.DoesNotExist:
             api.abort(404, f"User with id {id} doesn't exist")
         return "", 204
 
@@ -208,10 +228,10 @@ class UserAPI(Resource):
         if 'id_card' in payload:
             payload.pop('id_card')
         try:
-           User.update(**payload).where(User.id == id).execute()
-        except User.DoesNotExist:
+           UserT.update(**payload).where(UserT.id == id).execute()
+        except UserT.DoesNotExist:
             api.abort(404, f"User {id} doesn't exist")
-        return model_to_dict(User[id])
+        return model_to_dict(UserT[id])
 
 
 @api.route("/history")
@@ -234,8 +254,8 @@ class ConnectAPI(Resource):
         u = search_user(id_card)
         if u != False:
             login_user(u)
+            update_ll(u)
             return True
-
         api.abort(404, f"User with this card id doesn't exist")
 
 
@@ -257,6 +277,7 @@ class ConnectPWAPI(Resource):
             api.abort(403, f"User with this card can't log in with password")
         if verifyPassword(u.password, password):
             login_user(u)
+            update_ll(u)
             return True
         api.abort(403, "Invalid credentials")
         return False
@@ -273,21 +294,50 @@ class LogoutAPI(Resource):
         logout_user()
         return True
 
+
+@api.route("/anonym/<string:id>")
+@api.response(404, "user not found")
+@api.param("id", "The user  identifier")
+class AnonymAPI(Resource):
+    @login_required
+    @api.doc("anonym_user")
+    @api.marshal_with(user_model_read)
+    def put(self, id):
+        """Anonymize a user given its identifier"""
+        try:
+            user = UserT[id]
+            user.fname = ""
+            user.name = ""
+            user.mail = None
+            user.phone = None 
+            user.username = None
+            user.group_year = None
+            user.stats_agree = False
+
+        except UserT.DoesNotExist:
+            api.abort(404, f"User with id {id} doesn't exist")
+        return model_to_dict(user)
+
 @login_manager.user_loader
 def load_user(userid):
     "Get user by its id"
-    return User[userid]
+    return UserT[userid]
 
 def search_user(id_card):
     "Return an user by its card id"
     slist = Salt.select().order_by(Salt.year.desc())
     for s in slist:
         try:
-            return User.get(User.salt == s.year, User.id_card == hashCardID(id_card, s.salt))
-        except User.DoesNotExist:
+            return UserT.get(UserT.salt == s.year, UserT.id_card == hashCardID(id_card, s.salt))
+        except UserT.DoesNotExist:
             pass
     return False
 
 def create_tables():
     "Create tables for this file"
-    db_wrapper.database.create_tables([Salt, User])
+    db_wrapper.database.create_tables([Salt, UserT])
+
+def update_ll(u):
+    "Update last login date for a given user"
+    u.last_login = str(date.today())
+    u.save()
