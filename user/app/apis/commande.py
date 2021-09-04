@@ -39,7 +39,7 @@ class OrderDetail(db_wrapper.Model):
 
 items = api.model('Item list', {
     'id_product': fields.Integer,
-    'quantity': fields.String,
+    'quantity': fields.Integer,
 })
 
 orderlist_complete = api.clone('Order list', items ,{
