@@ -65,6 +65,7 @@ class RechargeAPI(Resource):
         payload = {x: api.payload[x] for x in api.payload if x in rechargeModel}
         payload['id'] = len(Recharge)+1
         payload["date"] = str(date.today())
+        payload['value'] = payload['value'] * 100
         if current_user.role.id == 1  and UserT[payload['id_manager']] == current_user:
             recharge = Recharge(**payload)
             recharge.save(force_insert=True)
