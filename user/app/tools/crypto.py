@@ -6,7 +6,11 @@ Set of cryptographic function.
 For example there are the functions to hash password and card id
 """
 
-import os, argon2
+import os
+from datetime import datetime, timedelta
+import argon2, jwt
+
+ISSUER_NAME = "OpenBar Auth"
 
 def generate_salt():
     """Generate a random salt with the same method as argon2-cffi lib
@@ -39,19 +43,52 @@ def hashCardID(id_card, salt):
             type=argon2.low_level.Type.ID))\
         [1:].replace('\'','')
 
-def verifyHash(string, hash):
+def verifyHash(hash, string):
     "Verify if the given string correspond to the hash"
     try:
-        if argon2.low_level.verify_secret(str.encode(string), str.encode(hash), argon2.low_level.Type.ID):
+        if argon2.low_level.verify_secret(str.encode(hash), str.encode(string), argon2.low_level.Type.ID):
             return True
     except argon2.exceptions.VerificationError:
         pass
     return False
 
-def verifyPassword(password, hash):
+def verifyPassword(hash, password):
     "Verify if the given password correspond to the hash"
-    return verifyHash(password, hash)
+    return verifyHash(hash, password)
 
-def verifyCardID(id_card, hash):
+def verifyCardID(hash, id_card):
     "Verify if the given card id correspond to the hash"
-    return verifyHash(id_card, hash)
+    return verifyHash(hash, id_card)
+
+def generate_user_token(user_id, permissions):
+    "Return an auth token given"
+    return jwt.encode(
+        {"exp": datetime.utcnow() + timedelta(seconds=3000),
+         "nbf": datetime.utcnow(),
+         "iss": ISSUER_NAME,
+         "aud": permissions,
+         "sub": user_id},
+         "secret", algorithm="HS512"
+    )
+
+def decode_user_token(encoded, fail_function, availible_audience):
+    """Decode a encoded JWT
+    If an error occurs fail_function(code, message) will be called
+    availible_audience is a list of sring describing allowed audience
+    """
+    try:
+        return jwt.decode(encoded, "secret",
+            algorithms=["HS512"],
+            issuer=ISSUER_NAME,
+            audience=availible_audience,
+            options={"require": ["exp", "nbf", "iss", "aud", "sub"]},)
+    except (jwt.InvalidTokenError, jwt.DecodeError):
+        fail_function(400, "Bad token")
+    except jwt.ExpiredSignatureError:
+        fail_function(401, "Token expired")
+    except (jwt.InvalidIssuedAtError, ImmatureSignatureError):
+        fail_function(401, "Token not yet valid")
+    except (jwt.InvalidAudienceError, jwt.InvalidIssuerError, jwt.InvalidKeyError, jwt.InvalidAlgorithmError, jwt.MissingRequiredClaimError):
+        fail_function(401, "Invalid token")
+    except jwt.InvalidSignatureError:
+        fail_function(401, "Invalid Signature")

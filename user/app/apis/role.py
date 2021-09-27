@@ -2,24 +2,16 @@
 # -*- coding: utf-8 -*-
 
 """
-Inspired by
-https://github.com/python-restx/flask-restx/blob/master/examples/todomvc.py
+API of Roles
 """
 
 from flask_restx import Namespace, Resource, fields
-
-from peewee import *
 from playhouse.shortcuts import model_to_dict
 
-from tools.db import db_wrapper
+from models.role import Role
+from tools.auth import is_password_logged, is_token_logged, is_barman, is_fully_logged
 
 api = Namespace('role', description='Role')
-
-
-class Role(db_wrapper.Model):
-    "DAO of a user role"
-    id = AutoField()
-    lib = CharField()
 
 roleModel = api.model('Role',{
     'id': fields.Integer(
@@ -29,26 +21,38 @@ roleModel = api.model('Role',{
     'lib': fields.String(
         required=True,
         description='Role description'),
+    'is_admin': fields.Boolean(
+        required=True,
+        description='If the role give user admin rigths',
+        example=False),
+    'is_barman': fields.Boolean(
+        required=True,
+        description='If the role give user barman/barwoman rigths',
+        example=False),
 })
 
 @api.route("/")
 class RoleListAPI(Resource):
     """Shows a list of all roles"""
-    @api.doc("role_user")
+    @api.doc("role_user", security='token')
     @api.marshal_list_with(roleModel)
     def get(self):
         """List all roles"""
         roles = Role.select()
         return [model_to_dict(r) for r in roles]
 
-    @api.doc("delete_role")
+    @is_password_logged(api)
+    @is_barman(api)
+    @api.doc("delete_role", security='password')
     @api.response(204, "role deleted")
     def delete(self):
         """Delete all role"""
         Role.delete().execute()
         return "", 204
 
-    @api.doc("create_role")
+    @is_password_logged(api)
+    @is_barman(api)
+    @api.doc("create_role", security='password')
     @api.expect(roleModel, validate=True)
     @api.marshal_with(roleModel, code=201)
     def post(self):
@@ -66,7 +70,7 @@ class RoleListAPI(Resource):
 @api.param("id", "The role  identifier")
 class RoleAPI(Resource):
     """Show a single role item and lets you delete them"""
-    @api.doc("get_role")
+    @api.doc("get_role", security='token')
     @api.marshal_with(roleModel)
     def get(self, id):
         """Fetch a given role"""
@@ -76,7 +80,9 @@ class RoleAPI(Resource):
         except Role.DoesNotExist:
             api.abort(404, f"Role with id {id} doesn't exist")
 
-    @api.doc("delete_role")
+    @is_password_logged(api)
+    @is_barman(api)
+    @api.doc("delete_role", security='password')
     @api.response(204, "role deleted")
     def delete(self, id):
         """Delete a role given its identifier"""
@@ -86,7 +92,9 @@ class RoleAPI(Resource):
             api.abort(404, f"Role {id} doesn't exist")
         return "", 204
 
-    @api.doc("update_role")
+    @is_password_logged(api)
+    @is_barman(api)
+    @api.doc("update_role", security='password')
     @api.expect(roleModel)
     @api.marshal_with(roleModel)
     def put(self, id):
@@ -101,7 +109,3 @@ class RoleAPI(Resource):
             return Role[id]
         except Role.DoesNotExist:
             api.abort(404, f"Role with id {id} doesn't exist")
-
-def create_tables():
-    "Create tables for this file"
-    db_wrapper.database.create_tables([Role])

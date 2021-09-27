@@ -2,8 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-Inspired by
-https://github.com/python-restx/flask-restx/blob/master/examples/todomvc.py
+API of User managment
 """
 
 import sys, os
@@ -12,58 +11,17 @@ import requests
 
 
 from flask_restx import Namespace, Resource, fields
-from peewee import *
 from playhouse.shortcuts import model_to_dict
-from flask_login import UserMixin, login_required, login_user, logout_user, current_user
-from tools.LoginManager import login_manager
 
-from tools.db import db_wrapper
 from tools.crypto import generate_salt, hashPassword, hashCardID, verifyPassword
+from tools.auth import is_password_logged, is_token_logged, is_barman, is_fully_logged
 
-from apis.role import Role
-from apis.salt import Salt
 
-local_history = []
+from models.user import User, search_user
+from models.role import Role
+from models.salt import Salt
 
 api = Namespace('user', description='User')
-
-class UserT(UserMixin,db_wrapper.Model):
-    """user object"""
-    id = AutoField()
-    id_card = CharField()
-    name = CharField()
-    fname = CharField()
-    balance = IntegerField(default=0)
-    role = ForeignKeyField(Role, backref="users")
-    salt = ForeignKeyField(Salt, backref="users")
-    group_year = IntegerField(null=True)
-    username = CharField(null=True, unique=True)
-    password = CharField(null=True)
-    phone = CharField(null=True)
-    mail = CharField(null=True)
-    stats_agree = BooleanField(default=False) 
-    last_login = DateTimeField()
-
-from tools.auth import is_manager
-
-
-username_login_model = api.model('Login with username', {
-    'username': fields.String(
-        required=True,
-        description='Username'),
-    'password': fields.String(
-        required=True,
-        description='Password'),
-})
-
-card_login_model = api.model('Login with card ID', {
-    'id_card': fields.String(
-        required=True,
-        description='User card identifier'),
-    'password': fields.String(
-        required=True,
-        description='Password'),
-})
 
 card_id_model = api.model('Card ID',{
     'id_card': fields.String(
@@ -133,15 +91,19 @@ user_model = api.clone('User', user_model_read, {
 @api.route("/")
 class UserListAPI(Resource):
     """Shows a list of all user"""
-    @is_manager(api)
-    @api.doc("list_user")
+    @api.doc("list_user", security='token')
     @api.marshal_list_with(user_model_read)
+    @is_token_logged(api)
+    @is_fully_logged(api)
+    @is_barman(api)
     def get(self):
         """List all user"""
-        users = UserT.select()
+        users = User.select()
         return [model_to_dict(u) for u in users]
 
-    @api.doc("create_user")
+    @is_password_logged(api)
+    @is_barman(api)
+    @api.doc("create_user", security='password')
     @api.expect(user_model, validate=True)
     @api.marshal_with(user_model_read, code=201)
     def post(self):
@@ -165,7 +127,7 @@ class UserListAPI(Resource):
         else:
             payload['password'] = None
         payload["last_login"] = str(date.today())
-        userobj = UserT(**payload)
+        userobj = User(**payload)
         userobj.save()
         payload["last_login"] = date.today()
         user = model_to_dict(userobj)
@@ -176,8 +138,10 @@ class UserListAPI(Resource):
 @api.response(404, "User not found")
 class UserCardAPI(Resource):
     """Show a single user item"""
-    @login_required
-    @api.doc("get_user_with_card")
+    @is_token_logged(api)
+    @is_fully_logged(api)
+    @is_barman(api)
+    @api.doc("get_user_with_card", security='token')
     @api.expect(card_id_model)
     @api.marshal_with(user_model_read)
     def get(self):
@@ -186,38 +150,41 @@ class UserCardAPI(Resource):
 
         u = search_user(id_card)
         if u != False:
-            local_history.insert(0, "*******")
             api.abort(404, f"User with id card {id_card} doesn't exist")
-        local_history.insert(0, u.name + " " + u.fname)
         return model_to_dict(u)
 
 @api.route("/<string:id>")
 @api.response(404, "user not found")
 @api.param("id", "The user  identifier")
 class UserAPI(Resource):
-    @login_required
-    @api.doc("get_user")
+    @is_token_logged(api)
+    @is_fully_logged(api)
+    @is_barman(api)
+    @api.doc("get_user", security='token')
     @api.marshal_with(user_model_read)
     def get(self, id):
         """Get a user given its identifier"""
         try:
-            user = UserT.get(UserT.id==id)
-        except UserT.DoesNotExist:
+            user = User.get(User.id==id)
+        except User.DoesNotExist:
             api.abort(404, f"User with id {id} doesn't exist")
         return model_to_dict(user)
 
-    @login_required
-    @api.doc("delete_user")
+    @is_password_logged(api)
+    @is_barman(api)
+    @api.doc("delete_user", security='password')
     @api.response(204, "User deleted")
     def delete(self, id):
         """Delete a user given its identifier"""
         try:
-            UserT[id].delete_instance()
-        except UserT.DoesNotExist:
+            User[id].delete_instance()
+        except User.DoesNotExist:
             api.abort(404, f"User with id {id} doesn't exist")
         return "", 204
 
-    @login_required
+    @is_password_logged(api)
+    @is_barman(api)
+    @api.doc("put_user", security='password')
     @api.expect(user_model)
     @api.marshal_with(user_model_read)
     def put(self, id):
@@ -228,84 +195,24 @@ class UserAPI(Resource):
         if 'id_card' in payload:
             payload.pop('id_card')
         try:
-           UserT.update(**payload).where(UserT.id == id).execute()
-        except UserT.DoesNotExist:
+           User.update(**payload).where(User.id == id).execute()
+        except User.DoesNotExist:
             api.abort(404, f"User {id} doesn't exist")
-        return model_to_dict(UserT[id])
-
-
-@api.route("/history")
-class History(Resource):
-    """Show the history of the NFC card reader. This history will reset each time you restart the app"""
-    @api.doc("get_history")
-    def get(self):
-        """Fetch the history"""
-        return local_history
-
-@api.route("/connect/")
-@api.response(404, "User not found")
-@api.param("id_card", "The user's card identifier")
-class ConnectAPI(Resource):
-    @api.doc("connect_user")
-    @api.expect(card_id_model)
-    def put(self):
-        """Connect a user given its identifier"""
-        id_card = api.payload['id_card']
-        u = search_user(id_card)
-        if u != False:
-            login_user(u)
-            update_ll(u)
-            return True
-        api.abort(404, f"User with this card id doesn't exist")
-
-
-
-@api.route("/connectpw/")
-@api.response(403, "Invalid credentials")
-@api.response(404, "User not found")
-class ConnectPWAPI(Resource):
-    @api.doc("connect_user_password")
-    @api.expect(card_login_model)
-    def put(self):
-        """Connect a user given its identifier and password"""
-        id_card = api.payload['id_card']
-        password = api.payload['password']
-        u = search_user(id_card)
-        if u == False:
-            api.abort(404, f"User with this card doesn't exist")
-        if u.password is None:
-            api.abort(403, f"User with this card can't log in with password")
-        if verifyPassword(u.password, password):
-            login_user(u)
-            update_ll(u)
-            return True
-        api.abort(403, "Invalid credentials")
-        return False
-
-
-@api.route("/logout")
-class LogoutAPI(Resource):
-    """Logout a user"""
-
-    @api.doc("logout_user")
-    @login_required
-    def put(self):
-        """Logout a user"""
-        logout_user()
-        return True
+        return model_to_dict(User[id])
 
 
 @api.route("/anonym/<string:id>")
 @api.response(404, "user not found")
 @api.param("id", "The user  identifier")
 class AnonymAPI(Resource):
-    @login_required
-    @api.doc("anonym_user")
+    @is_password_logged(api)
+    @is_barman(api)
+    @api.doc("anonym_user", security='password')
     @api.marshal_with(user_model_read)
     def put(self, id):
         """Anonymize a user given its identifier"""
         try:
-            user = UserT[id]
+            user = User[id]
             user.fname = ""
             user.name = ""
             user.mail = None
@@ -314,30 +221,6 @@ class AnonymAPI(Resource):
             user.group_year = None
             user.stats_agree = False
 
-        except UserT.DoesNotExist:
+        except User.DoesNotExist:
             api.abort(404, f"User with id {id} doesn't exist")
         return model_to_dict(user)
-
-@login_manager.user_loader
-def load_user(userid):
-    "Get user by its id"
-    return UserT[userid]
-
-def search_user(id_card):
-    "Return an user by its card id"
-    slist = Salt.select().order_by(Salt.year.desc())
-    for s in slist:
-        try:
-            return UserT.get(UserT.salt == s.year, UserT.id_card == hashCardID(id_card, s.salt))
-        except UserT.DoesNotExist:
-            pass
-    return False
-
-def create_tables():
-    "Create tables for this file"
-    db_wrapper.database.create_tables([Salt, UserT])
-
-def update_ll(u):
-    "Update last login date for a given user"
-    u.last_login = str(date.today())
-    u.save()
