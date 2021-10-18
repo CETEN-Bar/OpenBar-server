@@ -2,9 +2,10 @@
 # -*- coding: utf-8 -*-
 
 """
-Example API
+Example API for managing a task list
 Inspired by
 https://github.com/python-restx/flask-restx/blob/master/examples/todomvc.py
+The licence of this file is availible at the end of this file.
 """
 
 import os
@@ -19,18 +20,21 @@ api = Namespace('basic', description='Example API')
 
 FLNAME = "/tmp/basic.json"
 
+
 def _get():
     "Return the content of FLNAME. Be carefull to have the file locked"
     if not os.path.isfile(FLNAME):
         _write([], 0)
         return [], 0
-    with open(FLNAME, "r") as fl:
-        return json.load(fl)
+    with open(FLNAME, "r", encoding="utf-8") as file:
+        return json.load(file)
+
 
 def _write(tasks, counter):
     "Write to FLNAME. Be carefull to have the file locked"
-    with open(FLNAME, "w") as fl:
-        json.dump((tasks, counter), fl)
+    with open(FLNAME, "w", encoding="utf-8") as file:
+        json.dump((tasks, counter), file)
+
 
 class Tasks():
     """Object Database of a task"""
@@ -38,7 +42,8 @@ class Tasks():
         """Initialize an empty task list"""
         self.lock = FileLock(FLNAME + ".lock")
 
-    def getAll(self):
+    def get_all(self):
+        "Return all task"
         with self.lock:
             tasks, _ = _get()
             return tasks
@@ -80,10 +85,11 @@ class Tasks():
             tasks.remove(task)
             _write(tasks, counter)
 
-    def deleteAll(self):
+    def delete_all(self):
         """Delete the task given its id"""
         with self.lock:
             _write([], 0)
+
 
 taskDAO = Tasks()
 
@@ -116,13 +122,13 @@ class TaskListAPI(Resource):
     @api.marshal_list_with(taskModel)
     def get(self):
         """List all tasks"""
-        return taskDAO.getAll()
+        return taskDAO.get_all()
 
     @api.doc("delete_tasks")
     @api.response(204, "tasks deleted")
     def delete(self):
         """Delete all tasks"""
-        taskDAO.deleteAll()
+        taskDAO.delete_all()
         return "", 204
 
     @api.doc("create_task")
@@ -161,7 +167,8 @@ class TaskAPI(Resource):
             payload.pop('id')
         return taskDAO.update(id, payload)
 
-# Original Licence of https://github.com/python-restx/flask-restx/blob/master/examples/todomvc.py
+# Original Licence of
+# https://github.com/python-restx/flask-restx/blob/master/examples/todomvc.py
 
 # BSD 3-Clause License
 
@@ -187,7 +194,8 @@ class TaskAPI(Resource):
 
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 # AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE
 # DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
 # FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
 # DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR

@@ -2,16 +2,16 @@
 # -*- coding: utf-8 -*-
 
 """
-Example API
+Example API for managing a task list using peewee.
 Inspired by
 https://github.com/python-restx/flask-restx/blob/master/examples/todomvc.py
+The licence of this file is availible at the end of this file.
 """
 
 from dateutil import parser
-from datetime import datetime
 
 from flask_restx import Namespace, Resource, fields
-from peewee import *
+import peewee as pw
 from playhouse.shortcuts import model_to_dict
 
 from tools.auth import check_authorization
@@ -19,14 +19,15 @@ from tools.db import db_wrapper
 
 api = Namespace('db', description='Example API with db access')
 
+
 class Task(db_wrapper.Model):
     """Object Database of a task"""
     __tablename__ = 'task'
-    id = AutoField()
-    name = CharField()
-    description = TextField(null=True)
-    deadline_date = DateTimeField(null=True)
-    done = BooleanField()
+    id = pw.AutoField()
+    name = pw.CharField()
+    description = pw.TextField(null=True)
+    deadline_date = pw.DateTimeField(null=True)
+    done = pw.BooleanField()
 
 
 taskModel = api.model('task', {
@@ -77,7 +78,8 @@ class TaskListAPI(Resource):
         if 'id' in payload:
             payload.pop('id')
         if 'deadline_date' in payload:
-            payload['deadline_date'] = parser.isoparse(payload['deadline_date'])
+            payload['deadline_date'] = parser.isoparse(
+                                        payload['deadline_date'])
         task = Task(**payload)
         task.save()
         return model_to_dict(task), 201
@@ -124,11 +126,13 @@ class TaskAPI(Resource):
         except Task.DoesNotExist:
             api.abort(404, f"Task {id} doesn't exist")
 
+
 def create_tables():
     "Create tables for this file"
     db_wrapper.database.create_tables([Task])
 
-# Original Licence of https://github.com/python-restx/flask-restx/blob/master/examples/todomvc.py
+# Original Licence of
+# https://github.com/python-restx/flask-restx/blob/master/examples/todomvc.py
 
 # BSD 3-Clause License
 
@@ -154,7 +158,8 @@ def create_tables():
 
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 # AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE
 # DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
 # FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
 # DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR

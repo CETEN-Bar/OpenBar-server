@@ -5,13 +5,13 @@
 Definition of Role model
 """
 
-from peewee import *
-
+import peewee as pw
 from tools.db import db_wrapper
+
 
 class Role(db_wrapper.Model):
     "DAO of a user role"
-    id = AutoField()
-    lib = CharField()
-    is_admin = BooleanField(default=False)
-    is_barman = BooleanField(default=False)
+    id = pw.AutoField()
+    lib = pw.CharField()
+    is_admin = pw.BooleanField(default=False)
+    is_barman = pw.BooleanField(default=False)

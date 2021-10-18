@@ -6,23 +6,22 @@ Main functions for the example microservice flask app
 """
 
 import os
-from flask import Flask, g
+from flask import Flask
 from tools.db import db_wrapper
 
 from apis import apis
 from apis import create_tables as create_tables_apis
 
+
 def create_app():
     """Return the flask app for the example microservice"""
     app = Flask(__name__)
 
-    app.config['RESTPLUS_VALIDATE'] = True
-    
     app.register_blueprint(apis)
 
-    app.config['DATABASE'] = os.environ.get('DATABASE', default="sqlite:///:memory:")
+    app.config['DATABASE'] = os.environ.get('DATABASE',
+                                            default="sqlite:///:memory:")
     db_wrapper.init_app(app)
-
     with db_wrapper.database.connection_context():
         create_tables_apis()
 

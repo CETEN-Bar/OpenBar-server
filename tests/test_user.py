@@ -5,7 +5,6 @@
 Unit tests for the basic example API
 """
 import requests
-import json
 import random
 from dateutil import parser
 import unittest

@@ -5,9 +5,10 @@
 Definition of the Salt model
 """
 
-from peewee import *
+import peewee as pw
 from tools.db import db_wrapper
 
+
 class Salt(db_wrapper.Model):
-    year = IntegerField(primary_key=True)
-    salt = CharField()
+    year = pw.IntegerField(primary_key=True)
+    salt = pw.CharField()

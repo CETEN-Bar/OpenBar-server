@@ -9,11 +9,11 @@ from flask_restx import Namespace, Resource, fields
 from playhouse.shortcuts import model_to_dict
 
 from models.role import Role
-from tools.auth import is_password_logged, is_token_logged, is_barman, is_fully_logged
+from tools.auth import is_password_logged, is_barman
 
 api = Namespace('role', description='Role')
 
-roleModel = api.model('Role',{
+roleModel = api.model('Role', {
     'id': fields.Integer(
         readonly=True,
         attribute='id',
@@ -31,8 +31,9 @@ roleModel = api.model('Role',{
         example=False),
 })
 
+
 @api.route("/")
-class RoleListAPI(Resource):
+class RoleList(Resource):
     """Shows a list of all roles"""
     @api.doc("role_user", security='token')
     @api.marshal_list_with(roleModel)

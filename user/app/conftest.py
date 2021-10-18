@@ -7,8 +7,8 @@ Configuration file for pytest-flask
 import pytest
 from app import create_app
 
+
 @pytest.fixture
 def app():
     """Return the app flask object for tests"""
-    app = create_app()
-    return app
+    return create_app()

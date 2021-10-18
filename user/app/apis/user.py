@@ -5,25 +5,21 @@
 API of User managment
 """
 
-import sys, os
 from datetime import date
-import requests
-
 
 from flask_restx import Namespace, Resource, fields
 from playhouse.shortcuts import model_to_dict
 
-from tools.crypto import generate_salt, hashPassword, hashCardID, verifyPassword
-from tools.auth import is_password_logged, is_token_logged, is_barman, is_fully_logged
+from tools.crypto import generate_salt, hash_password, hash_cardID
+from tools.auth import is_password_logged, is_token_logged, is_barman,\
+    is_fully_logged
 
-
-from models.user import User, search_user
-from models.role import Role
+from models.user import User as UserDAO, search_user
 from models.salt import Salt
 
 api = Namespace('user', description='User')
 
-card_id_model = api.model('Card ID',{
+card_id_model = api.model('Card ID', {
     'id_card': fields.String(
         required=True,
         description='User card identifier'),
@@ -50,7 +46,8 @@ user_model_read = api.model('User Infos', {
         required=True,
         example=1,
         description='User\'s role identifier',
-        attribute= lambda x: x['role'] if type(x['role']) is int else x['role']['id']),
+        attribute=lambda x: x['role']
+                    if isinstance(x['role'], int) else x['role']['id']),
     'group_year': fields.Integer(
         required=False,
         example=2023,
@@ -88,8 +85,9 @@ user_model = api.clone('User', user_model_read, {
         example="BouthierUWU"),
 })
 
+
 @api.route("/")
-class UserListAPI(Resource):
+class UserList(Resource):
     """Shows a list of all user"""
     @api.doc("list_user", security='token')
     @api.marshal_list_with(user_model_read)
@@ -98,7 +96,7 @@ class UserListAPI(Resource):
     @is_barman(api)
     def get(self):
         """List all user"""
-        users = User.select()
+        users = UserDAO.select()
         return [model_to_dict(u) for u in users]
 
     @is_password_logged(api)
@@ -115,24 +113,29 @@ class UserListAPI(Resource):
         try:
             payload['salt'] = Salt[date.today().year]
         except Salt.DoesNotExist:
-            payload['salt'] = Salt(year=date.today().year, salt=generate_salt())
+            payload['salt'] = Salt(year=date.today().year,
+                                   salt=generate_salt())
             payload['salt'].save(force_insert=True)
 
         if search_user(payload['id_card']):
-            api.abort(409, f"User with id card {payload['id_card']} already exist")
+            api.abort(409,
+                      "User with id card {payload['id_card']} already exist")
 
-        payload['id_card'] = hashCardID(payload['id_card'], payload['salt'].salt)
+        payload['id_card'] = hash_cardID(payload['id_card'],
+                                        payload['salt'].salt)
         if payload['password'] != "":
-            payload['password'] = hashPassword(payload['password'], generate_salt())
+            payload['password'] = hash_password(payload['password'],
+                                               generate_salt())
         else:
             payload['password'] = None
         payload["last_login"] = str(date.today())
-        userobj = User(**payload)
+        userobj = UserDAO(**payload)
         userobj.save()
         payload["last_login"] = date.today()
         user = model_to_dict(userobj)
         user['role'] = userobj.role.id
         return user, 201
+
 
 @api.route("/card/")
 @api.response(404, "User not found")
@@ -148,15 +151,17 @@ class UserCardAPI(Resource):
         """Fetch a given user"""
         id_card = api.payload["id_card"]
 
-        u = search_user(id_card)
-        if u != False:
+        user = search_user(id_card)
+        if user is not False:
             api.abort(404, f"User with id card {id_card} doesn't exist")
-        return model_to_dict(u)
+        return model_to_dict(user)
+
 
 @api.route("/<string:id>")
 @api.response(404, "user not found")
 @api.param("id", "The user  identifier")
-class UserAPI(Resource):
+class User(Resource):
+    """API to manage an user"""
     @is_token_logged(api)
     @is_fully_logged(api)
     @is_barman(api)
@@ -165,8 +170,8 @@ class UserAPI(Resource):
     def get(self, id):
         """Get a user given its identifier"""
         try:
-            user = User.get(User.id==id)
-        except User.DoesNotExist:
+            user = UserDAO.get(UserDAO.id == id)
+        except UserDAO.DoesNotExist:
             api.abort(404, f"User with id {id} doesn't exist")
         return model_to_dict(user)
 
@@ -178,7 +183,7 @@ class UserAPI(Resource):
         """Delete a user given its identifier"""
         try:
             User[id].delete_instance()
-        except User.DoesNotExist:
+        except UserDAO.DoesNotExist:
             api.abort(404, f"User with id {id} doesn't exist")
         return "", 204
 
@@ -195,8 +200,8 @@ class UserAPI(Resource):
         if 'id_card' in payload:
             payload.pop('id_card')
         try:
-           User.update(**payload).where(User.id == id).execute()
-        except User.DoesNotExist:
+            UserDAO.update(**payload).where(UserDAO.id == id).execute()
+        except UserDAO.DoesNotExist:
             api.abort(404, f"User {id} doesn't exist")
         return model_to_dict(User[id])
 
@@ -204,7 +209,8 @@ class UserAPI(Resource):
 @api.route("/anonym/<string:id>")
 @api.response(404, "user not found")
 @api.param("id", "The user  identifier")
-class AnonymAPI(Resource):
+class Anonymise(Resource):
+    "API to anonymise users to be GDPR compliant"
     @is_password_logged(api)
     @is_barman(api)
     @api.doc("anonym_user", security='password')
@@ -216,11 +222,11 @@ class AnonymAPI(Resource):
             user.fname = ""
             user.name = ""
             user.mail = None
-            user.phone = None 
+            user.phone = None
             user.username = None
             user.group_year = None
             user.stats_agree = False
 
-        except User.DoesNotExist:
+        except UserDAO.DoesNotExist:
             api.abort(404, f"User with id {id} doesn't exist")
         return model_to_dict(user)

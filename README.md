@@ -23,9 +23,10 @@ The api root is accesible at [https://localhost/api/v0]
 
 ## Configuration
 All configurations are in the `.env` file
-Don't forget to 
+Don't forget to change passwords for production use.
 
 ## Testing
 To launch tests :
 ```bash
-docker-compose -f ./docker-compose.ubar.test.yml run ubar
+docker-compose -f ./docker-compose.test.yml run sut
+```
