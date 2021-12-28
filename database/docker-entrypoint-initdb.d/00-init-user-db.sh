@@ -1,14 +1,9 @@
 #!/bin/bash
 set -e
 
-# This script will create user and database for each micro-service
+# This script will create user and database
 
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
-    CREATE USER service_example PASSWORD '$DB_SERVICE_EXAMPLE_PW';
-    CREATE DATABASE "example";
-    GRANT ALL PRIVILEGES ON DATABASE "example" TO service_example;
-
-    CREATE USER service_user PASSWORD '$DB_SERVICE_USER_PW';
-    CREATE DATABASE "user";
-    GRANT ALL PRIVILEGES ON DATABASE "user" TO service_user;
+    CREATE USER openbar PASSWORD '$DB_OPENBAR_PW';
+    GRANT ALL PRIVILEGES ON DATABASE "$POSTGRES_DB" TO openbar;
 EOSQL

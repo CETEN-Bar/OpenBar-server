@@ -15,6 +15,4 @@ RUN poetry install $([ "$ENV" = "production" ] && echo "--no-dev") --no-interact
 
 COPY app /opt/app/
 
-RUN chmod +x docker-entrypoint.sh
-
-ENTRYPOINT ["/opt/app/docker-entrypoint.sh"]
+ENTRYPOINT ["poetry" "run" "pytest"]

@@ -1,0 +1,27 @@
+[tool.poetry]
+name = "openbar"
+version = "0.1"
+description = "A REST server giving an API to manage for a point of sale with managed storage and the users make themselves the order"
+authors = ["Vahlblue <c@vahl.blue>"]
+license = "GNU GPLv3"
+
+[tool.poetry.dependencies]
+python = "^3.8"
+fastapi = "^0.70.1"
+argon2-cffi = "^21.3.0"
+gunicorn = "^20.1.0"
+peewee = "^3.14.8"
+psycopg2 = "^2.9.2"
+python-dateutil = "^2.8.2"
+PyJWT = "^2.3.0"
+uvicorn = "^0.16.0"
+
+[tool.poetry.dev-dependencies]
+pytest = "^6.2.5"
+pytest-cov = "^3.0.0"
+tox-poetry-installer = "^0.8.2"
+python-multipart = "^0.0.5"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
