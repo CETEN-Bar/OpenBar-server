@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "OpenBar tests"
+version = "0.1.0"
+description = "Integration tests for OpenBar"
+authors = ["Vahlblue <c@vahl.blue>"]
+license = "GNU GPLv3"
+
+[tool.poetry.dependencies]
+python = "^3.8"
+requests = "^2.26.0"
+python-dateutil = "^2.8.2"
+pytest = "^6.2.5"
+
+[tool.poetry.dev-dependencies]
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

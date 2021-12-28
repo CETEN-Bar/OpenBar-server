@@ -1,0 +1,31 @@
+version: '3'
+services:
+  openbar:
+    build: ./openbar
+    ports:
+      - "5000:5000"
+    environment:
+      - ENV=test
+      - DATABASE=sqlite:////tmp/db
+      - BASE_URL=/api/v0/
+    volumes:
+      - "./openbar/app:/opt/app"
+
+  nginx:
+    image: nginx:latest
+    links:
+      - openbar
+    volumes:
+      - "./nginx/default.conf:/etc/nginx/conf.d/default.conf"
+    ports:
+      - "8080:8080"
+    restart: always
+
+  sut:
+    build: ./tests
+    links:
+      - nginx
+    depends_on:
+      - nginx
+    volumes:
+      - "./tests/app:/opt/app"

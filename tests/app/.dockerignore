@@ -1,0 +1,10 @@
+env/
+venv/
+.venv/
+virtualenv/
+.pytest_cache/
+.tox/
+__pycache__/
+
+*.pyc
+images/

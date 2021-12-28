@@ -1,0 +1,9 @@
+[run]
+branch = True
+
+[paths]
+source =
+    apis/
+    models/
+    schemas
+    tools/
