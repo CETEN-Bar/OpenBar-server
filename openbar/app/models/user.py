@@ -33,7 +33,7 @@ class User(pw.Model):
     balance = pw.IntegerField(default=0)
     group_year = pw.IntegerField()
     phone = pw.CharField(null=True)
-    mail = pw.CharField(null=True)
+    email = pw.CharField(null=True, unique=True)
     stats_agree = pw.BooleanField(default=False)
     last_login = pw.DateTimeField(null=True)
 

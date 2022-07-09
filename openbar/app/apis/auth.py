@@ -25,7 +25,7 @@ router = APIRouter(
 
 @router.post("/token", dependencies=[Depends(get_db)])
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
-    """Login an user using its identifier.
+    """Login a user using its identifier.
     You must follow one of these cases
     - card_id : partial login
     - card_id with password : normal login
@@ -41,7 +41,7 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
     The time of validity can be set in config.py with TOKEN_VALIDITY_TIME.
     """
     incorrect = HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
+            status_code=status.HTTP_403_FORBIDDEN,
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )

@@ -56,6 +56,15 @@ def create_user(body: UserIn) -> UserOut:
     """
     payload = body.dict()
 
+    if UserDAO.get_or_none(username=payload['username']) is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An user with the same username already exists")
+    if UserDAO.get_or_none(email=payload['email']) is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An user with the same e-mail address already exists")
+
     try:
         RoleDAO[body.role]
     except RoleDAO.DoesNotExist:
@@ -109,6 +118,14 @@ def put_user(user_id: int, body: UserUpdate) -> UserOut:
         status_code=status.HTTP_404_NOT_FOUND,
         detail="This user doesn't exist")
     payload = body.dict(exclude_unset=True)
+    if UserDAO.get_or_none(username=payload['username']) is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An user with the same username already exists")
+    if UserDAO.get_or_none(email=payload['email']) is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An user with the same e-mail address already exists")
     verifying_secrets(payload)
     if 'card_id' in payload:
         try:

@@ -34,7 +34,7 @@ async def get_current_user(token: Optional[str] = Depends(oauth2_scheme),
     if credentials is not None:
         # Checking Username/Password auth
         incorrect = HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
+            status_code=status.HTTP_403_FORBIDDEN,
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Basic"},
         )
