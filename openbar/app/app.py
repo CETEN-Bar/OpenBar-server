@@ -12,7 +12,7 @@ from filelock import FileLock
 from apis import user, recharge, order
 from apis import auth, role
 
-from models import create_tables
+from models.migration import migrate
 from tools.db import db, is_sqlite
 
 # Lock the db on table creation
@@ -37,7 +37,7 @@ def create_app():
     # Locking the db with a file to ensure other workers doesn't try to create the tables at the same time
     with db_lock:
         db.connect()
-        create_tables()
+        migrate()
         if is_sqlite:
             db.pragma('foreign_keys', 1, permanent=True)
         db.close()
