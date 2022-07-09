@@ -1,4 +1,4 @@
-FROM python:3 
+FROM python:3.10
 
 ENV IN_DOCKER=1 \
     PYTHONUNBUFFERED=1 \
